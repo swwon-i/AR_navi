@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowOverlay } from './components/ArrowOverlay';
 import { CameraView } from './components/CameraView';
+import { DestinationSearch } from './components/DestinationSearch';
 import { RoadviewPanel } from './components/RoadviewPanel';
 import { RouteMap } from './components/RouteMap';
 import { useCamera, requestOrientationPermission } from './hooks/useCamera';
@@ -14,12 +15,17 @@ import {
   type Point,
 } from './lib/geo';
 import { resolveInstruction, type Instruction } from './lib/guidance';
+import { placePoint, type Place } from './lib/places';
 import { fetchRoute, type Route } from './lib/route';
 import { isSimulationMode } from './lib/simulation';
 
-// M1/M2 확인용 고정 경로. 지상 구간이라 M3에서 로드뷰를 붙이기에도 적합하다.
-const DEMO_START: Point = [127.0219, 37.5205]; // 가로수길 북단
-const DEMO_END: Point = [127.0265, 37.5168]; // 신사역 방면
+/**
+ * 시뮬레이션 모드의 가상 출발지.
+ *
+ * 실제 모드에서는 GPS로 잡은 현재 위치를 출발지로 쓴다. 시뮬레이션에는 GPS가 없으므로
+ * 고정 좌표가 필요하다. 로드뷰가 촘촘한 지상 구간으로 골랐다.
+ */
+const SIM_ORIGIN: Point = [127.0219, 37.5205]; // 가로수길 북단
 
 /** 목표 지점을 지났다고 볼 반경(m) */
 const WAYPOINT_RADIUS_M = 8;
@@ -33,10 +39,25 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<View>('walk');
   const [started, setStarted] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [destination, setDestination] = useState<Place | null>(null);
   const simMode = isSimulationMode();
 
   const camera = useCamera();
   const nav = useNavigation(route?.points ?? null);
+
+  /**
+   * 출발지. 실제 모드에서는 현재 위치, 시뮬레이션에서는 고정 좌표.
+   * 경로를 받기 전에도 장소 검색의 거리순 정렬에 쓰인다.
+   */
+  const origin: Point | null = simMode ? SIM_ORIGIN : nav.position;
+
+  // 실제 모드에서는 화면을 열자마자 위치 추적을 시작한다.
+  // (위치 권한은 사용자 제스처가 필요 없다. 방향센서 권한만 "체험 시작" 버튼에서 요청한다)
+  useEffect(() => {
+    if (simMode) return;
+    return nav.startTracking();
+  }, [simMode, nav.startTracking]);
 
   const turns = useMemo(() => (route ? extractTurns(route.points) : []), [route]);
 
@@ -92,11 +113,19 @@ export default function App() {
     return next;
   }, [guidance?.delta]);
 
-  async function loadRoute() {
+  async function selectDestination(place: Place) {
+    setSearching(false);
+    setDestination(place);
+
+    if (!origin) {
+      setError('현재 위치를 아직 못 잡았다. 위치 권한을 확인해라.');
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
-      setRoute(await fetchRoute(DEMO_START, DEMO_END));
+      setRoute(await fetchRoute(origin, placePoint(place)));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -121,8 +150,8 @@ export default function App() {
       <header>
         <h1>AR navi <small>M3</small></h1>
         <div className="controls">
-          <button onClick={loadRoute} disabled={loading}>
-            {loading ? '조회 중…' : '경로 조회'}
+          <button onClick={() => setSearching(true)} disabled={loading}>
+            {loading ? '조회 중…' : destination ? '목적지 변경' : '목적지 검색'}
           </button>
           <button onClick={startExperience} disabled={!route || started}>
             체험 시작
@@ -138,6 +167,14 @@ export default function App() {
 
       {simMode && <div className="banner">시뮬레이션 모드 — 실제 GPS를 쓰지 않는다</div>}
       {(error || nav.error) && <div className="banner error">{error ?? nav.error}</div>}
+
+      {searching && (
+        <DestinationSearch
+          origin={origin}
+          onSelect={selectDestination}
+          onClose={() => setSearching(false)}
+        />
+      )}
 
       <main className="stage">
         {view === 'walk' ? (
@@ -173,6 +210,9 @@ export default function App() {
       </main>
 
       <section className="info">
+        {destination && (
+          <p className="dest">→ {destination.name} <span className="src">{destination.address}</span></p>
+        )}
         {route && (
           <p>
             총 {route.totalDistance}m / 약 {Math.round(route.totalTime / 60)}분 ·

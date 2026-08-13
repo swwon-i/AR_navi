@@ -13,6 +13,7 @@ kakao:
   # 카카오 REST API 키. 절대 프론트엔드로 내려보내지 않는다.
   rest-key: ${REST_KEY:}
   walk-url: https://dapi.kakao.com/v2/routing/walk
+  place-search-url: https://dapi.kakao.com/v2/local/search/keyword.json
 
 # 프론트 dev 서버 origin. 카카오 JS 키에 등록된 포트와 일치해야 한다.
 cors:
