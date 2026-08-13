@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>M0 스파이크 — 로드뷰 캔버스 픽셀 접근 검증</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; display: flex; height: 100vh; }
+  #rv { flex: 1; min-width: 0; }
+  #panel { width: 460px; overflow: auto; padding: 16px; background: #111; color: #eee; font-size: 13px; }
+  h2 { font-size: 14px; margin: 16px 0 6px; color: #8cf; }
+  pre { white-space: pre-wrap; word-break: break-all; margin: 4px 0; }
+  .ok { color: #6f6; } .bad { color: #f66; } .warn { color: #fc6; }
+  button { margin: 8px 0; padding: 6px 12px; }
+  img { max-width: 100%; border: 1px solid #444; margin-top: 8px; }
+</style>
+
+<!--
+  ⚠️ SDK 로드 '전에' getContext를 가로챈다.
+  WebGL 캔버스는 preserveDrawingBuffer:false(기본)면 프레임 종료 후 읽으면 빈 화면이 나온다.
+  SDK가 컨텍스트를 만들 때 이 옵션을 강제로 켜야 픽셀을 읽을 수 있는지 판별 가능.
+-->
+<script>
+window.__ctxLog = [];
+(function () {
+  const orig = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function (type, attrs) {
+    if (type === 'webgl' || type === 'webgl2' || type === 'experimental-webgl') {
+      attrs = Object.assign({}, attrs, { preserveDrawingBuffer: true });
+    }
+    const ctx = orig.call(this, type, attrs);
+    window.__ctxLog.push({ canvas: this, type, patched: !!attrs && !!attrs.preserveDrawingBuffer });
+    return ctx;
+  };
+})();
+</script>
+
+<!-- 키는 gitignore 대상인 key.local.js 에 있다. key.local.example.js 를 복사해 만들 것. -->
+<script src="./key.local.js"></script>
+</head>
+<body>
+<div id="rv"></div>
+<div id="panel">
+  <button id="run">픽셀 접근 테스트 실행</button>
+  <div id="log"></div>
+  <div id="shot"></div>
+</div>
+
+<script>
+const log = (msg, cls) => {
+  const el = document.createElement('pre');
+  if (cls) el.className = cls;
+  el.textContent = msg;
+  document.getElementById('log').appendChild(el);
+};
+
+// SDK를 동적으로 주입한다. autoload=false + kakao.maps.load 로 준비 완료를 보장.
+if (!window.KAKAO_JS_KEY || window.KAKAO_JS_KEY === 'YOUR_JS_KEY_HERE') {
+  log('key.local.js 가 없거나 키가 비어 있다. key.local.example.js 를 복사해 만들어라.', 'bad');
+} else {
+  const s = document.createElement('script');
+  s.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${window.KAKAO_JS_KEY}&autoload=false`;
+  s.onerror = () => log('SDK 로드 실패 — 키가 틀렸거나 도메인 미등록 (401/403)', 'bad');
+  s.onload = () => kakao.maps.load(initRoadview);
+  document.head.appendChild(s);
+}
+
+function initRoadview() {
+  // 강남역 부근 — 로드뷰 데이터가 확실히 있는 지점
+  const POS = new kakao.maps.LatLng(37.497942, 127.027618);
+  const rv = new kakao.maps.Roadview(document.getElementById('rv'));
+  new kakao.maps.RoadviewClient().getNearestPanoId(POS, 50, function (panoId) {
+    if (!panoId) { log('panoId 없음 — 좌표를 바꿔라', 'bad'); return; }
+    log('panoId: ' + panoId, 'ok');
+    rv.setPanoId(panoId, POS);
+  });
+}
+
+document.getElementById('run').onclick = function () {
+  document.getElementById('log').innerHTML = '';
+  document.getElementById('shot').innerHTML = '';
+
+  // ── 검증 1: 캔버스가 DOM에 있는가 (없으면 CSS 스프라이트/img 타일 방식)
+  const canvases = document.querySelectorAll('#rv canvas');
+  log('── 1. 캔버스 탐색');
+  log('#rv 내 canvas 개수: ' + canvases.length, canvases.length ? 'ok' : 'bad');
+  log('가로챈 getContext 호출: ' + JSON.stringify(
+    window.__ctxLog.map(c => c.type + (c.patched ? '(preserveDrawingBuffer 강제)' : ''))));
+
+  if (!canvases.length) {
+    log('canvas가 없다 → SDK가 <img> 타일을 DOM에 깔았을 가능성. #rv 안 img 태그 확인:', 'warn');
+    const imgs = document.querySelectorAll('#rv img');
+    log('img 개수: ' + imgs.length + (imgs.length ? ' / 첫 src: ' + imgs[0].src : ''));
+  }
+
+  // ── 검증 2: 읽기 시도 (SecurityError = tainted, 빈 화면 = 버퍼 소실)
+  log('\n── 2. 픽셀 읽기');
+  canvases.forEach(function (c, i) {
+    let url;
+    try {
+      url = c.toDataURL('image/png');
+    } catch (e) {
+      log(`canvas[${i}] ${c.width}x${c.height} → ${e.name}: TAINTED (CORS 차단)`, 'bad');
+      return;
+    }
+    // 실제로 내용이 있는지 — 축소 복사 후 픽셀 분산 확인
+    const probe = document.createElement('canvas');
+    probe.width = 32; probe.height = 32;
+    const img = new Image();
+    img.onload = function () {
+      const p = probe.getContext('2d');
+      p.drawImage(img, 0, 0, 32, 32);
+      const d = p.getImageData(0, 0, 32, 32).data;
+      let nonZero = 0;
+      for (let k = 0; k < d.length; k += 4) if (d[k] || d[k+1] || d[k+2]) nonZero++;
+      const ratio = nonZero / (32 * 32);
+      if (ratio > 0.1) {
+        log(`canvas[${i}] ${c.width}x${c.height} → 읽기 성공, 유효 픽셀 ${(ratio*100).toFixed(0)}%`, 'ok');
+        const out = new Image(); out.src = url;
+        document.getElementById('shot').appendChild(out);
+      } else {
+        log(`canvas[${i}] ${c.width}x${c.height} → 읽혔지만 빈 화면 (유효 픽셀 ${(ratio*100).toFixed(0)}%)\n`
+          + '  = preserveDrawingBuffer 문제. 패치가 안 먹었거나 SDK가 오프스크린 합성 중.', 'warn');
+      }
+    };
+    img.src = url;
+  });
+
+  // ── 검증 3: 타일 이미지 자체의 CORS 헤더 (2가 tainted일 때의 우회 가능성)
+  log('\n── 3. 타일 CORS 확인');
+  const tiles = performance.getEntriesByType('resource')
+    .map(e => e.name)
+    .filter(n => /\.(jpg|jpeg|png|webp)/i.test(n) && /kakao|daum/i.test(n));
+  if (!tiles.length) { log('타일 URL을 못 찾음 (blob/데이터 URI일 수 있음)', 'warn'); return; }
+  log('타일 예시: ' + tiles[0]);
+  const t = new Image();
+  t.crossOrigin = 'anonymous';
+  t.onload = () => log('crossOrigin=anonymous 로드 성공 → 타일 직접 매칭 경로 가능', 'ok');
+  t.onerror = () => log('crossOrigin 로드 실패 → CDN에 CORS 헤더 없음. 서버 프록시 필요', 'bad');
+  t.src = tiles[0];
+};
+</script>
+</body>
+</html>

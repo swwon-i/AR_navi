@@ -1,0 +1,23 @@
+# 의존성
+node_modules/
+
+# 빌드 산출물
+dist/
+build/
+.vite/
+
+# 환경변수 / API 키 — 절대 커밋 금지
+.env
+.env.*
+!.env.example
+spike/key.local.js
+
+# 에디터 / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 로그
+*.log
+npm-debug.log*
