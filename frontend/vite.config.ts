@@ -18,7 +18,12 @@ export default defineConfig({
     host: true,
     // 실기기 테스트용 터널 도메인을 허용한다. Vite 6 는 등록되지 않은 Host 헤더로 오는
     // 요청을 차단하므로(DNS 리바인딩 방어) 여기에 없으면 폰에서 접속이 막힌다.
-    allowedHosts: ['localhost', '.ngrok-free.app', '.ngrok.app', '.trycloudflare.com'],
+    allowedHosts: [
+      'localhost',
+      '.ngrok-free.dev', '.ngrok.dev',   // 현재 ngrok 이 발급하는 도메인
+      '.ngrok-free.app', '.ngrok.app',   // 예전 도메인 (기존 링크 호환)
+      '.trycloudflare.com',
+    ],
     watch: {
       // Windows 호스트 → Linux 컨테이너 바인드 마운트에서는 파일 변경 이벤트가
       // 전달되지 않는다. 폴링으로 바꿔야 HMR 이 동작한다.

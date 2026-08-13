@@ -139,10 +139,17 @@ export default function App() {
    */
   async function startExperience() {
     setStarted(true);
+
+    // 방향센서 권한은 iOS에서 사용자 제스처 안에서만 요청할 수 있으므로 여기서 먼저 연다.
     await requestOrientationPermission();
-    await camera.start();
+
+    // 내비게이션을 먼저 시작한다. 카메라는 실패하거나 거부될 수 있는데,
+    // 그 때문에 길안내 자체가 시작되지 않으면 안 된다.
     if (simMode) nav.startSimulation();
     else nav.startTracking();
+
+    // 카메라는 뒤에서 열고, 실패해도 위 흐름에 영향을 주지 않는다.
+    camera.start().catch(() => undefined);
   }
 
   return (
