@@ -6,6 +6,16 @@ dist/
 build/
 .vite/
 
+# Gradle
+.gradle/
+backend/build/
+
+# TypeScript 증분 빌드 캐시
+*.tsbuildinfo
+
+# Playwright MCP 스냅샷/로그
+.playwright-mcp/
+
 # 환경변수 / API 키 — 절대 커밋 금지
 .env
 .env.*

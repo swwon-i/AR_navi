@@ -1,0 +1,57 @@
+# 로컬 개발 환경. 호스트에 JDK / Node 를 설치하지 않아도 된다.
+#
+#   docker compose up          전체 기동
+#   docker compose up backend  백엔드만
+#   docker compose logs -f     로그
+#   docker compose down        정리
+#
+# 키는 저장소 루트 .env 에서 읽는다 (커밋되지 않음).
+#   REST_KEY            → 백엔드가 사용, 브라우저로 나가지 않음
+#   VITE_KAKAO_JS_KEY   → 프론트 빌드에 주입, 도메인 제한으로 보호
+
+services:
+  backend:
+    image: gradle:8.12-jdk21
+    container_name: arnavi-backend
+    working_dir: /app/backend
+    command: gradle bootRun --console=plain
+    ports:
+      - "8081:8081"
+    volumes:
+      - .:/app
+      # Gradle 의존성 캐시. 없으면 컨테이너를 다시 만들 때마다 전부 새로 받는다.
+      - gradle-cache:/home/gradle/.gradle
+    environment:
+      # application.yml 이 ../.env 를 읽지만, 환경변수로도 넘겨 우선순위를 명확히 한다.
+      REST_KEY: ${REST_KEY:-}
+    healthcheck:
+      # 카카오 호출까지 성공해야 정상으로 본다 (키 누락을 여기서 걸러낸다)
+      test: ["CMD-SHELL", "wget -qO- 'http://localhost:8081/api/route?startX=127.0219&startY=37.5205&endX=127.0265&endY=37.5168' > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 90s
+
+  frontend:
+    image: node:22-alpine
+    container_name: arnavi-frontend
+    working_dir: /app/frontend
+    command: sh -c "npm install --no-fund --no-audit && npm run dev"
+    ports:
+      # 카카오 JS 키에 등록된 도메인과 일치해야 한다 (http://localhost:8080)
+      - "8080:8080"
+    volumes:
+      - .:/app
+      # 호스트의 node_modules 와 섞이지 않도록 컨테이너 전용 볼륨을 얹는다.
+      # (Windows 호스트에서 설치한 바이너리는 alpine 에서 동작하지 않는다)
+      - frontend-node-modules:/app/frontend/node_modules
+    environment:
+      VITE_KAKAO_JS_KEY: ${VITE_KAKAO_JS_KEY:-}
+      # 컨테이너 네트워크에서는 localhost 가 아니라 서비스 이름으로 찾는다.
+      BACKEND_URL: http://backend:8081
+    depends_on:
+      - backend
+
+volumes:
+  gradle-cache:
+  frontend-node-modules:

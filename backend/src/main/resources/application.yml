@@ -1,0 +1,23 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: ar-navi-backend
+  # 저장소 루트의 .env 를 properties 로 읽어 REST_KEY 를 주입한다.
+  # (.env 는 .gitignore 대상이며 spike/*.mjs 와 같은 파일을 공유한다)
+  config:
+    import: "optional:file:../.env[.properties]"
+
+kakao:
+  # 카카오 REST API 키. 절대 프론트엔드로 내려보내지 않는다.
+  rest-key: ${REST_KEY:}
+  walk-url: https://dapi.kakao.com/v2/routing/walk
+
+# 프론트 dev 서버 origin. 카카오 JS 키에 등록된 포트와 일치해야 한다.
+cors:
+  allowed-origins: http://localhost:8080
+
+logging:
+  level:
+    com.arnavi: DEBUG
