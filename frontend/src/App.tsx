@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowOverlay } from './components/ArrowOverlay';
 import { CameraView } from './components/CameraView';
+import { RoadviewPanel } from './components/RoadviewPanel';
 import { RouteMap } from './components/RouteMap';
 import { useCamera, requestOrientationPermission } from './hooks/useCamera';
 import { useNavigation } from './hooks/useNavigation';
@@ -23,13 +24,14 @@ const DEMO_END: Point = [127.0265, 37.5168]; // 신사역 방면
 /** 목표 지점을 지났다고 볼 반경(m) */
 const WAYPOINT_RADIUS_M = 8;
 
-type View = 'camera' | 'map';
+/** walk = 로드뷰(위) + 카메라(아래) 분할, map = 경로 전체 확인용 */
+type View = 'walk' | 'map';
 
 export default function App() {
   const [route, setRoute] = useState<Route | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [view, setView] = useState<View>('camera');
+  const [view, setView] = useState<View>('walk');
   const [started, setStarted] = useState(false);
   const simMode = isSimulationMode();
 
@@ -117,7 +119,7 @@ export default function App() {
   return (
     <div className="app">
       <header>
-        <h1>AR navi <small>M2</small></h1>
+        <h1>AR navi <small>M3</small></h1>
         <div className="controls">
           <button onClick={loadRoute} disabled={loading}>
             {loading ? '조회 중…' : '경로 조회'}
@@ -128,8 +130,8 @@ export default function App() {
           {simMode && started && (
             <button onClick={nav.stopSimulation}>⏸ 정지</button>
           )}
-          <button onClick={() => setView(view === 'camera' ? 'map' : 'camera')}>
-            {view === 'camera' ? '지도' : '카메라'}
+          <button onClick={() => setView(view === 'walk' ? 'map' : 'walk')}>
+            {view === 'walk' ? '지도' : '주행'}
           </button>
         </div>
       </header>
@@ -138,17 +140,28 @@ export default function App() {
       {(error || nav.error) && <div className="banner error">{error ?? nav.error}</div>}
 
       <main className="stage">
-        {view === 'camera' ? (
-          <>
-            <CameraView videoRef={camera.videoRef} status={camera.status} error={camera.error} />
-            <ArrowOverlay
-              delta={guidance?.delta ?? null}
-              instruction={instruction}
-              distanceToTurn={guidance?.distanceToTurn ?? null}
-              nextTurnDirection={guidance?.upcoming?.direction ?? null}
-              headingSource={nav.headingSource}
-            />
-          </>
+        {view === 'walk' ? (
+          // 위 = 여기서 보여야 할 풍경(로드뷰), 아래 = 지금 보이는 풍경(카메라).
+          // 대조를 사용자 머릿속이 아니라 화면에서 하게 만드는 구성이다.
+          <div className="split">
+            <div className="split-top">
+              <RoadviewPanel
+                position={nav.position}
+                targetBearing={guidance?.target ?? null}
+                distanceToTurn={guidance?.distanceToTurn ?? null}
+              />
+            </div>
+            <div className="split-bottom">
+              <CameraView videoRef={camera.videoRef} status={camera.status} error={camera.error} />
+              <ArrowOverlay
+                delta={guidance?.delta ?? null}
+                instruction={instruction}
+                distanceToTurn={guidance?.distanceToTurn ?? null}
+                nextTurnDirection={guidance?.upcoming?.direction ?? null}
+                headingSource={nav.headingSource}
+              />
+            </div>
+          </div>
         ) : (
           <RouteMap
             points={route?.points ?? []}
