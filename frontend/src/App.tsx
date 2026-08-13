@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowOverlay } from './components/ArrowOverlay';
+import { CameraView } from './components/CameraView';
 import { RouteMap } from './components/RouteMap';
+import { useCamera, requestOrientationPermission } from './hooks/useCamera';
 import { useNavigation } from './hooks/useNavigation';
 import {
   extractTurns,
@@ -9,57 +12,49 @@ import {
   nearestIndex,
   type Point,
 } from './lib/geo';
+import { resolveInstruction, type Instruction } from './lib/guidance';
 import { fetchRoute, type Route } from './lib/route';
 import { isSimulationMode } from './lib/simulation';
 
-// M1 확인용 고정 경로. 지상 구간이라 M3에서 로드뷰를 붙이기에도 적합하다.
+// M1/M2 확인용 고정 경로. 지상 구간이라 M3에서 로드뷰를 붙이기에도 적합하다.
 const DEMO_START: Point = [127.0219, 37.5205]; // 가로수길 북단
 const DEMO_END: Point = [127.0265, 37.5168]; // 신사역 방면
+
+/** 목표 지점을 지났다고 볼 반경(m) */
+const WAYPOINT_RADIUS_M = 8;
+
+type View = 'camera' | 'map';
 
 export default function App() {
   const [route, setRoute] = useState<Route | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [view, setView] = useState<View>('camera');
+  const [started, setStarted] = useState(false);
   const simMode = isSimulationMode();
 
-  const turns = useMemo(
-    () => (route ? extractTurns(route.points) : []),
-    [route],
-  );
-
+  const camera = useCamera();
   const nav = useNavigation(route?.points ?? null);
 
-  async function loadRoute() {
-    setLoading(true);
-    setError(null);
-    try {
-      setRoute(await fetchRoute(DEMO_START, DEMO_END));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }
+  const turns = useMemo(() => (route ? extractTurns(route.points) : []), [route]);
 
   /**
    * 지금 향해 가고 있는 경로 점의 인덱스.
    *
    * "가장 가까운 점의 다음"으로 잡으면 구간 중간을 지나는 순간 목표가 한 구간 통째로
-   * 건너뛰어, 모퉁이에 닿기도 전에 회전 안내가 뜬다. 목표에 충분히 접근했을 때만
-   * 앞으로 넘긴다.
+   * 건너뛰어, 모퉁이에 닿기도 전에 회전 안내가 뜬다. 목표에 충분히 접근했을 때만 넘긴다.
    */
   const [targetIndex, setTargetIndex] = useState(1);
   const routeRef = useRef<Route | null>(null);
 
-  const WAYPOINT_RADIUS_M = 8;
-
   useEffect(() => {
     if (!route || !nav.position) return;
 
-    // 경로가 새로 로드되면 현재 위치에서 가장 가까운 점의 다음부터 시작한다.
     if (routeRef.current !== route) {
       routeRef.current = route;
-      setTargetIndex(Math.min(nearestIndex(route.points, nav.position) + 1, route.points.length - 1));
+      setTargetIndex(
+        Math.min(nearestIndex(route.points, nav.position) + 1, route.points.length - 1),
+      );
       return;
     }
 
@@ -75,46 +70,94 @@ export default function App() {
     });
   }, [route, nav.position]);
 
-  // 목표 지점까지의 방위각과, 현재 진행 방향과의 차이
   const guidance = useMemo(() => {
     if (!route || !nav.position) return null;
     const target = bearing(nav.position, route.points[targetIndex]);
     const delta = nav.heading === null ? null : normalizeDegrees(target - nav.heading);
-    const upcoming = turns.find((t) => t.index >= targetIndex);
+    const upcoming = turns.find((t) => t.index >= targetIndex) ?? null;
     const distanceToTurn = upcoming
       ? Math.round(distanceMeters(nav.position, upcoming.point))
       : null;
     return { target, delta, upcoming, distanceToTurn };
   }, [route, nav.position, nav.heading, turns, targetIndex]);
 
+  // 안내 문구는 히스테리시스를 거쳐 결정한다. 직전 값이 입력에 포함되므로 ref로 들고 있는다.
+  const previousInstruction = useRef<Instruction | null>(null);
+  const instruction = useMemo(() => {
+    if (guidance?.delta == null) return null;
+    const next = resolveInstruction(guidance.delta, previousInstruction.current);
+    previousInstruction.current = next;
+    return next;
+  }, [guidance?.delta]);
+
+  async function loadRoute() {
+    setLoading(true);
+    setError(null);
+    try {
+      setRoute(await fetchRoute(DEMO_START, DEMO_END));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /**
+   * 체험 시작. iOS는 방향센서 권한을 사용자 제스처 안에서만 요청할 수 있으므로
+   * 이 핸들러 안에서 카메라·센서·위치추적을 한 번에 연다 (스펙 4장).
+   */
+  async function startExperience() {
+    setStarted(true);
+    await requestOrientationPermission();
+    await camera.start();
+    if (simMode) nav.startSimulation();
+    else nav.startTracking();
+  }
+
   return (
     <div className="app">
       <header>
-        <h1>AR navi <small>M1</small></h1>
+        <h1>AR navi <small>M2</small></h1>
         <div className="controls">
           <button onClick={loadRoute} disabled={loading}>
             {loading ? '조회 중…' : '경로 조회'}
           </button>
-          {simMode ? (
-            <>
-              <button onClick={nav.startSimulation} disabled={!route}>▶ 시뮬레이션</button>
-              <button onClick={nav.stopSimulation} disabled={!route}>⏸ 정지</button>
-            </>
-          ) : (
-            <button onClick={nav.startTracking}>실제 위치 추적</button>
+          <button onClick={startExperience} disabled={!route || started}>
+            체험 시작
+          </button>
+          {simMode && started && (
+            <button onClick={nav.stopSimulation}>⏸ 정지</button>
           )}
+          <button onClick={() => setView(view === 'camera' ? 'map' : 'camera')}>
+            {view === 'camera' ? '지도' : '카메라'}
+          </button>
         </div>
       </header>
 
       {simMode && <div className="banner">시뮬레이션 모드 — 실제 GPS를 쓰지 않는다</div>}
       {(error || nav.error) && <div className="banner error">{error ?? nav.error}</div>}
 
-      <RouteMap
-        points={route?.points ?? []}
-        turns={turns}
-        position={nav.position}
-        heading={nav.heading}
-      />
+      <main className="stage">
+        {view === 'camera' ? (
+          <>
+            <CameraView videoRef={camera.videoRef} status={camera.status} error={camera.error} />
+            <ArrowOverlay
+              delta={guidance?.delta ?? null}
+              instruction={instruction}
+              distanceToTurn={guidance?.distanceToTurn ?? null}
+              nextTurnDirection={guidance?.upcoming?.direction ?? null}
+              headingSource={nav.headingSource}
+            />
+          </>
+        ) : (
+          <RouteMap
+            points={route?.points ?? []}
+            turns={turns}
+            position={nav.position}
+            heading={nav.heading}
+          />
+        )}
+      </main>
 
       <section className="info">
         {route && (
@@ -129,17 +172,10 @@ export default function App() {
             <span className="src">({nav.headingSource ?? '없음'})</span>
             {' → '}목표 {Math.round(guidance.target)}°
             {guidance.delta !== null && (
-              <strong className={Math.abs(guidance.delta) > 30 ? 'off' : 'ok'}>
+              <strong className={Math.abs(guidance.delta) > 50 ? 'off' : 'ok'}>
                 {' '}차이 {Math.round(guidance.delta)}°
               </strong>
             )}
-          </p>
-        )}
-        {guidance?.upcoming && (
-          <p className="next">
-            {guidance.distanceToTurn}m 앞{' '}
-            {guidance.upcoming.direction === 'left' ? '좌' : '우'}회전
-            {' '}{Math.abs(Math.round(guidance.upcoming.delta))}°
           </p>
         )}
       </section>

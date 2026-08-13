@@ -17,7 +17,7 @@ header {
 h1 { font-size: 16px; margin: 0; }
 h1 small { color: #8b93a7; font-weight: 400; margin-left: 6px; }
 
-.controls { display: flex; gap: 6px; }
+.controls { display: flex; gap: 6px; flex-wrap: wrap; }
 
 button {
   padding: 6px 12px; border-radius: 6px; border: 1px solid #2f3545;
@@ -29,16 +29,67 @@ button:not(:disabled):hover { background: #232937; }
 .banner { padding: 8px 14px; font-size: 13px; background: #1d2740; color: #9fc0ff; }
 .banner.error { background: #3a1d22; color: #ff9c9c; }
 
-.map { flex: 1; min-height: 0; }
+/* 카메라와 지도가 같은 자리를 쓴다 */
+.stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
 
+.map { position: absolute; inset: 0; }
+
+/* ── 카메라 프리뷰 ───────────────────────────── */
+.camera { position: absolute; inset: 0; background: #05070c; }
+
+.camera-video {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+
+.camera-fallback {
+  /* 화면 상단에 둔다. 가운데는 화살표 자리라 겹치면 둘 다 읽기 어려워진다. */
+  position: absolute; top: 0; left: 0; right: 0;
+  display: flex; align-items: flex-start; justify-content: center;
+  text-align: center; padding: 20px 24px; font-size: 13px; color: #7c8398;
+}
+.camera-fallback .muted { line-height: 1.6; }
+
+/* ── 방향 안내 오버레이 ──────────────────────── */
+.overlay {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 18px; pointer-events: none;
+}
+
+.arrow {
+  /* 회전은 인라인 style 로 들어온다. 급변할 때 튀지 않도록 완만히 따라간다. */
+  transition: transform 220ms ease-out, color 200ms linear;
+  filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.55));
+}
+.arrow.ok { color: #48d17a; }
+.arrow.off { color: #ffb454; }
+
+.instruction {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 10px 18px; border-radius: 12px;
+  background: rgba(8, 10, 16, 0.62);
+  backdrop-filter: blur(4px);
+}
+.instruction strong { font-size: 22px; letter-spacing: -0.01em; }
+.instruction .next-turn { font-size: 13px; color: #9fc0ff; }
+
+.overlay-hint { color: #8b93a7; font-size: 14px; }
+
+.overlay-warn {
+  position: absolute; bottom: 14px; left: 14px; right: 14px;
+  margin: 0; text-align: center; font-size: 12px;
+  color: #ffd08a; background: rgba(58, 40, 12, 0.72);
+  padding: 6px 10px; border-radius: 8px;
+}
+
+/* ── 하단 정보 ──────────────────────────────── */
 .info { padding: 10px 14px; border-top: 1px solid #232733; font-size: 13px; }
 .info p { margin: 4px 0; }
 .info .src { color: #8b93a7; margin-left: 4px; font-size: 12px; }
 .info .ok { color: #6ee787; }
 .info .off { color: #ffb454; }
-.info .next { color: #9fc0ff; }
 
-/* 지도 오버레이 */
+/* ── 지도 오버레이 ──────────────────────────── */
 .turn-pin {
   padding: 2px 6px; border-radius: 10px; font-size: 11px; font-weight: 700;
   background: #ffb454; color: #1a1200; white-space: nowrap;
