@@ -19,6 +19,13 @@ kakao:
 cors:
   allowed-origins: http://localhost:8080
 
+management:
+  endpoints:
+    web:
+      exposure:
+        # 헬스체크만 연다. 컨테이너 기동 확인 외에는 노출할 이유가 없다
+        include: health
+
 logging:
   level:
     com.arnavi: DEBUG

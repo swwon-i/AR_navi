@@ -1,15 +1,18 @@
 package com.arnavi.route;
 
+import com.arnavi.common.KakaoApiException;
 import com.arnavi.route.dto.RouteResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -56,6 +59,11 @@ public class KakaoRouteClient {
                 .uri(uri)
                 .header(HttpHeaders.AUTHORIZATION, "KakaoAK " + restKey)
                 .retrieve()
+                .onStatus(HttpStatusCode::isError, (request, response) -> {
+                    // 응답 본문에 실제 원인이 담겨 있다. 이것 없이는 "400"만 남는다.
+                    String errorBody = new String(response.getBody().readAllBytes(), StandardCharsets.UTF_8);
+                    throw new KakaoApiException("도보 경로 조회", response.getStatusCode(), errorBody);
+                })
                 .body(JsonNode.class);
 
         return normalize(body);

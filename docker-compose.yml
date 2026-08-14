@@ -25,11 +25,12 @@ services:
       # application.yml 이 ../.env 를 읽지만, 환경변수로도 넘겨 우선순위를 명확히 한다.
       REST_KEY: ${REST_KEY:-}
     healthcheck:
-      # 카카오 호출까지 성공해야 정상으로 본다 (키 누락을 여기서 걸러낸다)
-      test: ["CMD-SHELL", "wget -qO- 'http://localhost:8081/api/route?startX=127.0219&startY=37.5205&endX=127.0265&endY=37.5168' > /dev/null || exit 1"]
-      interval: 10s
-      timeout: 10s
-      retries: 20
+      # 앱 기동 여부만 본다. 절대 카카오 API 를 부르지 말 것 —
+      # 10초 간격이면 하루 8,640 회가 되어 무료 쿼터를 헬스체크만으로 소진한다.
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
       start_period: 90s
 
   frontend:

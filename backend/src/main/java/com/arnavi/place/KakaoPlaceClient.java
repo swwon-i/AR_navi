@@ -1,13 +1,16 @@
 package com.arnavi.place;
 
+import com.arnavi.common.KakaoApiException;
 import com.arnavi.place.dto.PlaceResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -55,6 +58,10 @@ public class KakaoPlaceClient {
                 .uri(builder.build().encode().toUri())
                 .header(HttpHeaders.AUTHORIZATION, "KakaoAK " + restKey)
                 .retrieve()
+                .onStatus(HttpStatusCode::isError, (request, response) -> {
+                    String errorBody = new String(response.getBody().readAllBytes(), StandardCharsets.UTF_8);
+                    throw new KakaoApiException("장소 검색", response.getStatusCode(), errorBody);
+                })
                 .body(JsonNode.class);
 
         List<PlaceResponse.Place> places = new ArrayList<>();
