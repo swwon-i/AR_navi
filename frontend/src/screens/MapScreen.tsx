@@ -6,7 +6,6 @@ import type { Route } from '../lib/route';
 interface Props {
   route: Route;
   turns: Turn[];
-  origin: Place | null;
   destination: Place | null;
   position: Point | null;
   heading: number | null;
@@ -18,7 +17,6 @@ interface Props {
 export function MapScreen({
   route,
   turns,
-  origin,
   destination,
   position,
   heading,
@@ -43,7 +41,7 @@ export function MapScreen({
       <section className="route-summary">
         <div className="route-line">
           <span className="dot start" aria-hidden />
-          <span className="text">{origin ? origin.name : '현재 위치'}</span>
+          <span className="text">현재 위치</span>
         </div>
         <div className="route-line">
           <span className="dot end" aria-hidden />

@@ -11,6 +11,7 @@ import {
   extractTurns,
   nearestIndex,
   normalizeDegrees,
+  projectOnRoute,
   type Point,
   type Turn,
 } from '../lib/geo';
@@ -31,6 +32,10 @@ export interface Guidance {
   distanceToTurn: number | null;
   /** 도착지까지 남은 직선 거리(m) */
   remaining: number | null;
+  /** 현재 위치를 경로 위로 투영한 좌표. 로드뷰가 이 값을 쓴다 */
+  snapped: Point | null;
+  /** 경로에서 벗어난 거리(m) */
+  offRouteM: number | null;
 }
 
 export function useGuidance(
@@ -72,11 +77,20 @@ export function useGuidance(
 
   const core = useMemo(() => {
     if (!route || !position) {
-      return { target: null, delta: null, upcoming: null, distanceToTurn: null, remaining: null };
+      return {
+        target: null,
+        delta: null,
+        upcoming: null,
+        distanceToTurn: null,
+        remaining: null,
+        snapped: null,
+        offRouteM: null,
+      };
     }
     const target = bearing(position, route.points[targetIndex]);
     const delta = heading === null ? null : normalizeDegrees(target - heading);
     const upcoming = turns.find((t) => t.index >= targetIndex) ?? null;
+    const projection = projectOnRoute(route.points, position);
 
     return {
       target,
@@ -84,6 +98,8 @@ export function useGuidance(
       upcoming,
       distanceToTurn: upcoming ? Math.round(distanceMeters(position, upcoming.point)) : null,
       remaining: Math.round(distanceMeters(position, route.points[route.points.length - 1])),
+      snapped: projection?.point ?? null,
+      offRouteM: projection ? Math.round(projection.offRouteM) : null,
     };
   }, [route, position, heading, turns, targetIndex]);
 

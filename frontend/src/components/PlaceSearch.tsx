@@ -5,22 +5,14 @@ import type { Point } from '../lib/geo';
 interface Props {
   /** 화면 상단 제목. "출발지 검색" / "도착지 검색" */
   title: string;
-  /** 검색 기준 좌표(보통 현재 위치). 있으면 가까운 순으로 정렬된다 */
+  /** 검색 기준 좌표(현재 위치). 있으면 가까운 순으로 정렬된다 */
   origin: Point | null;
-  /** 현재 위치를 그대로 선택하는 항목을 노출할지. 출발지 입력에서만 쓴다 */
-  allowCurrentLocation?: boolean;
   onSelect: (place: Place | null) => void;
   onClose: () => void;
 }
 
-/** 장소 검색 시트. 출발지·도착지 양쪽에서 쓴다. */
-export function PlaceSearch({
-  title,
-  origin,
-  allowCurrentLocation = false,
-  onSelect,
-  onClose,
-}: Props) {
+/** 장소 검색 시트. */
+export function PlaceSearch({ title, origin, onSelect, onClose }: Props) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Place[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -59,12 +51,6 @@ export function PlaceSearch({
           {loading ? '…' : '검색'}
         </button>
       </form>
-
-      {allowCurrentLocation && (
-        <button type="button" className="current-location" onClick={() => onSelect(null)}>
-          현재 위치로 설정
-        </button>
-      )}
 
       {!origin && <p className="search-note">현재 위치를 아직 못 잡아 거리순 정렬은 생략된다</p>}
       {error && <p className="search-error">{error}</p>}

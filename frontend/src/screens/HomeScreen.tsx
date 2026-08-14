@@ -1,31 +1,28 @@
 import type { Place } from '../lib/places';
 
 interface Props {
-  /** null 이면 "현재 위치" */
-  origin: Place | null;
   destination: Place | null;
-  /** 현재 위치를 아직 못 잡았으면 false. 출발지가 현재 위치일 때 안내를 띄운다 */
+  /** 현재 위치를 잡았는지. 출발지는 항상 현재 위치이므로 이게 없으면 길찾기가 불가능하다 */
   hasCurrentPosition: boolean;
   loading: boolean;
-  onEditOrigin: () => void;
   onEditDestination: () => void;
-  onSwap: () => void;
   onSubmit: () => void;
 }
 
-/** 홈 화면. 출발지와 도착지를 정한다. */
+/**
+ * 홈 화면. 목적지만 정한다.
+ *
+ * 출발지는 언제나 현재 위치다. 이 앱의 가치는 실제로 그 자리에 서서 카메라와 로드뷰를
+ * 대조하는 데서 나오므로, 경로 위에 있지 않은 상태를 만들 수 있게 열어둘 이유가 없다.
+ */
 export function HomeScreen({
-  origin,
   destination,
   hasCurrentPosition,
   loading,
-  onEditOrigin,
   onEditDestination,
-  onSwap,
   onSubmit,
 }: Props) {
-  const originLabel = origin ? origin.name : '현재 위치';
-  const ready = destination !== null && (origin !== null || hasCurrentPosition);
+  const ready = destination !== null && hasCurrentPosition;
 
   return (
     <div className="home">
@@ -34,36 +31,29 @@ export function HomeScreen({
         <p>실제 거리 풍경과 카메라 화면을 나란히 보며 방향을 확인한다</p>
       </div>
 
-      <div className="fields">
-        <div className="field-rows">
-          <button type="button" className="field" onClick={onEditOrigin}>
-            <span className="dot start" aria-hidden />
-            <span className="label">출발</span>
-            <span className={`value ${origin ? '' : 'muted'}`}>{originLabel}</span>
-          </button>
-
-          <button type="button" className="field" onClick={onEditDestination}>
-            <span className="dot end" aria-hidden />
-            <span className="label">도착</span>
-            <span className={`value ${destination ? '' : 'placeholder'}`}>
-              {destination ? destination.name : '어디로 갈까?'}
-            </span>
-          </button>
+      <div className="field-rows">
+        <div className="field static">
+          <span className="dot start" aria-hidden />
+          <span className="label">출발</span>
+          <span className={`value ${hasCurrentPosition ? 'muted' : 'placeholder'}`}>
+            {hasCurrentPosition ? '현재 위치' : '위치를 잡는 중…'}
+          </span>
         </div>
 
-        <button
-          type="button"
-          className="swap"
-          onClick={onSwap}
-          disabled={!destination}
-          aria-label="출발지와 도착지 바꾸기"
-        >
-          ⇅
+        <button type="button" className="field" onClick={onEditDestination}>
+          <span className="dot end" aria-hidden />
+          <span className="label">도착</span>
+          <span className={`value ${destination ? '' : 'placeholder'}`}>
+            {destination ? destination.name : '어디로 갈까?'}
+          </span>
         </button>
       </div>
 
-      {!origin && !hasCurrentPosition && (
-        <p className="home-note">현재 위치를 잡는 중이다. 위치 권한을 허용했는지 확인해라.</p>
+      {!hasCurrentPosition && (
+        <p className="home-note">
+          위치 권한을 허용해야 길찾기를 시작할 수 있다. 실내에서는 위치를 잡는 데
+          시간이 걸릴 수 있다.
+        </p>
       )}
 
       <button type="button" className="primary" onClick={onSubmit} disabled={!ready || loading}>

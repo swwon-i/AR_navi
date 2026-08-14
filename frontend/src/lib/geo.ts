@@ -120,6 +120,66 @@ export function smoothAngle(previous: number | null, next: number, alpha = 0.2):
   return (previous + alpha * normalizeDegrees(next - previous) + 360) % 360;
 }
 
+export interface RouteProjection {
+  /** 경로 위로 투영된 좌표 */
+  point: Point;
+  /** 투영된 지점이 속한 구간의 시작 인덱스 */
+  index: number;
+  /** 실제 위치에서 경로까지의 거리(m). 경로 이탈 판정에 쓴다 */
+  offRouteM: number;
+}
+
+/**
+ * 현재 위치를 경로 폴리라인 위로 투영한다.
+ *
+ * 로드뷰는 GPS 원본이 아니라 이 값을 쓴다. 도심 GPS는 ±10~20m 튀는데, 원본으로
+ * 파노라마를 찾으면 내가 걷는 길이 아니라 평행한 옆 골목이나 건물 뒤편 파노라마가
+ * 잡힌다. 그러면 "여기서 보여야 할 풍경"이 다른 길 풍경이 되어 오히려 헷갈린다.
+ *
+ * 꼭짓점이 아니라 구간 위의 임의 지점으로 투영한다. 경로 점 간격이 28~50m라
+ * 꼭짓점만 쓰면 구간 중간에서 20m 이상 어긋난다.
+ */
+export function projectOnRoute(points: Point[], position: Point): RouteProjection | null {
+  if (points.length === 0) return null;
+  if (points.length === 1) {
+    return { point: points[0], index: 0, offRouteM: distanceMeters(points[0], position) };
+  }
+
+  // 위경도를 미터 평면으로 근사한다. 수백 m 범위에서는 오차가 무시할 수준이다.
+  const mPerLon = 111_320 * Math.cos(toRad(position[1]));
+  const mPerLat = 110_540;
+  const toXY = ([lng, lat]: Point): [number, number] => [lng * mPerLon, lat * mPerLat];
+
+  const p = toXY(position);
+  let best: RouteProjection | null = null;
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = toXY(points[i]);
+    const b = toXY(points[i + 1]);
+    const abx = b[0] - a[0];
+    const aby = b[1] - a[1];
+    const lengthSq = abx * abx + aby * aby;
+
+    // 구간 위에서의 위치 비율. 0~1로 잘라 구간 밖으로 벗어나지 않게 한다.
+    const t =
+      lengthSq === 0
+        ? 0
+        : Math.max(0, Math.min(1, ((p[0] - a[0]) * abx + (p[1] - a[1]) * aby) / lengthSq));
+
+    const projected: Point = [
+      points[i][0] + (points[i + 1][0] - points[i][0]) * t,
+      points[i][1] + (points[i + 1][1] - points[i][1]) * t,
+    ];
+    const offRouteM = distanceMeters(projected, position);
+
+    if (!best || offRouteM < best.offRouteM) {
+      best = { point: projected, index: i, offRouteM };
+    }
+  }
+
+  return best;
+}
+
 /** 경로에서 현재 위치와 가장 가까운 점의 인덱스. */
 export function nearestIndex(points: Point[], current: Point): number {
   let best = 0;

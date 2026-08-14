@@ -7,6 +7,9 @@ import type { Guidance } from '../hooks/useGuidance';
 import type { Point } from '../lib/geo';
 import type { Place } from '../lib/places';
 
+/** 이 거리 이상 벗어나면 경로 이탈로 본다. GPS 오차보다 충분히 커야 한다 */
+const OFF_ROUTE_M = 40;
+
 interface Props {
   guidance: Guidance;
   position: Point | null;
@@ -46,11 +49,22 @@ export function WalkScreen({
         </span>
       </header>
 
+      {guidance.offRouteM !== null && guidance.offRouteM > OFF_ROUTE_M && (
+        <div className="banner warn">
+          경로에서 {guidance.offRouteM}m 벗어나 있다 — 로드뷰는 가장 가까운 경로 지점을 보여준다
+        </div>
+      )}
+
       <div className="stage">
         <div className="split">
           <div className="split-top">
+            {/*
+              GPS 원본이 아니라 경로 위로 투영한 좌표를 넘긴다. 원본을 쓰면 도심
+              GPS 오차(±10~20m)로 평행한 옆 골목 파노라마가 잡혀, 걷는 길과 다른
+              풍경이 뜬다.
+            */}
             <RoadviewPanel
-              position={position}
+              position={guidance.snapped ?? position}
               targetBearing={guidance.target}
               distanceToTurn={guidance.distanceToTurn}
             />
@@ -77,6 +91,9 @@ export function WalkScreen({
             <strong className={Math.abs(guidance.delta) > 50 ? 'off' : 'ok'}>
               {' '}차이 {Math.round(guidance.delta)}°
             </strong>
+          )}
+          {guidance.offRouteM !== null && (
+            <span className="src">· 경로에서 {guidance.offRouteM}m</span>
           )}
         </p>
       </section>

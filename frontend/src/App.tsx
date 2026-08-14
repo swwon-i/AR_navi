@@ -20,14 +20,10 @@ import { WalkScreen } from './screens/WalkScreen';
 const SIM_POSITION: Point = [127.0219, 37.5205]; // 가로수길 북단
 
 type Screen = 'home' | 'map' | 'walk';
-type Editing = 'origin' | 'destination' | null;
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home');
-  const [editing, setEditing] = useState<Editing>(null);
-
-  /** null 이면 "현재 위치" */
-  const [origin, setOrigin] = useState<Place | null>(null);
+  const [searching, setSearching] = useState(false);
   const [destination, setDestination] = useState<Place | null>(null);
 
   const [route, setRoute] = useState<Route | null>(null);
@@ -38,11 +34,13 @@ export default function App() {
   const camera = useCamera();
   const nav = useNavigation(route?.points ?? null);
 
-  /** GPS(또는 시뮬레이션)로 잡은 현재 위치 */
+  /**
+   * GPS(또는 시뮬레이션)로 잡은 현재 위치. 출발지는 언제나 이 값이다.
+   *
+   * 출발지를 임의로 지정할 수 있게 하면 경로 위에 있지 않은 상태를 사용자가 만들 수
+   * 있는데, 이 앱은 그 자리에 서 있을 때만 쓸모가 있다. 시연은 시뮬레이션 모드로 한다.
+   */
   const currentPosition: Point | null = simMode ? (nav.position ?? SIM_POSITION) : nav.position;
-
-  /** 경로 조회에 쓸 출발 좌표 */
-  const originPoint: Point | null = origin ? placePoint(origin) : currentPosition;
 
   // 실제 모드에서는 화면을 열자마자 위치 추적을 시작한다.
   // 위치 권한은 사용자 제스처가 필요 없다. 방향센서 권한만 "길안내 시작"에서 요청한다.
@@ -54,16 +52,12 @@ export default function App() {
   const guidance = useGuidance(route, nav.position, nav.heading);
 
   async function findRoute() {
-    if (!destination) return;
-    if (!originPoint) {
-      setError('현재 위치를 아직 못 잡았다. 위치 권한을 확인하거나 출발지를 직접 지정해라.');
-      return;
-    }
+    if (!destination || !currentPosition) return;
 
     setLoading(true);
     setError(null);
     try {
-      setRoute(await fetchRoute(originPoint, placePoint(destination)));
+      setRoute(await fetchRoute(currentPosition, placePoint(destination)));
       setScreen('map');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -94,18 +88,9 @@ export default function App() {
     setScreen('map');
   }
 
-  function swap() {
-    // 도착지가 없으면 바꿀 것이 없다. 현재 위치(null)와도 맞바꿀 수 있다.
-    if (!destination) return;
-    setOrigin(destination);
-    setDestination(origin);
-    setRoute(null);
-  }
-
-  function selectPlace(place: Place | null) {
-    if (editing === 'origin') setOrigin(place);
-    else if (editing === 'destination') setDestination(place);
-    setEditing(null);
+  function selectDestination(place: Place | null) {
+    if (place) setDestination(place);
+    setSearching(false);
     setRoute(null);
   }
 
@@ -121,13 +106,10 @@ export default function App() {
 
       {screen === 'home' && (
         <HomeScreen
-          origin={origin}
           destination={destination}
           hasCurrentPosition={currentPosition !== null}
           loading={loading}
-          onEditOrigin={() => setEditing('origin')}
-          onEditDestination={() => setEditing('destination')}
-          onSwap={swap}
+          onEditDestination={() => setSearching(true)}
           onSubmit={findRoute}
         />
       )}
@@ -136,7 +118,6 @@ export default function App() {
         <MapScreen
           route={route}
           turns={guidance.turns}
-          origin={origin}
           destination={destination}
           position={nav.position}
           heading={nav.heading}
@@ -157,13 +138,12 @@ export default function App() {
         />
       )}
 
-      {editing && (
+      {searching && (
         <PlaceSearch
-          title={editing === 'origin' ? '출발지 검색' : '도착지 검색'}
+          title="도착지 검색"
           origin={currentPosition}
-          allowCurrentLocation={editing === 'origin'}
-          onSelect={selectPlace}
-          onClose={() => setEditing(null)}
+          onSelect={selectDestination}
+          onClose={() => setSearching(false)}
         />
       )}
     </div>
