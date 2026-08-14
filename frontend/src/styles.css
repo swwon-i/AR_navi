@@ -7,17 +7,17 @@ body {
   color: #e6e8ec;
 }
 
-.app { display: flex; flex-direction: column; height: 100vh; }
+.app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 
 header {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; padding: 10px 14px; border-bottom: 1px solid #232733;
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; border-bottom: 1px solid #232733; flex: none;
 }
-
 h1 { font-size: 16px; margin: 0; }
-h1 small { color: #8b93a7; font-weight: 400; margin-left: 6px; }
-
-.controls { display: flex; gap: 6px; flex-wrap: wrap; }
+.sim-tag {
+  font-size: 11px; padding: 2px 7px; border-radius: 999px;
+  background: #1d2740; color: #9fc0ff;
+}
 
 button {
   padding: 6px 12px; border-radius: 6px; border: 1px solid #2f3545;
@@ -26,56 +26,106 @@ button {
 button:disabled { opacity: 0.4; cursor: default; }
 button:not(:disabled):hover { background: #232937; }
 
-.banner { padding: 8px 14px; font-size: 13px; background: #1d2740; color: #9fc0ff; }
+button.primary {
+  background: #2b7fff; border-color: #2b7fff; color: #fff; font-weight: 600;
+}
+button.primary:not(:disabled):hover { background: #4a92ff; }
+
+.banner { padding: 8px 14px; font-size: 13px; background: #1d2740; color: #9fc0ff; flex: none; }
 .banner.error { background: #3a1d22; color: #ff9c9c; }
 
-/* ── 목적지 검색 ────────────────────────────── */
-.search {
-  padding: 10px 14px; border-bottom: 1px solid #232733; background: #141822;
-  max-height: 55vh; overflow: auto;
-}
-
-.search-form { display: flex; gap: 6px; }
-.search-form input {
-  flex: 1; min-width: 0; padding: 7px 10px; font-size: 14px;
-  border-radius: 6px; border: 1px solid #2f3545;
-  background: #0f1319; color: #e6e8ec;
-}
-.search-form input::placeholder { color: #5f6678; }
-
-.search-note { margin: 8px 0 0; font-size: 12px; color: #ffd08a; }
-.search-error { margin: 8px 0 0; font-size: 12px; color: #ff9c9c; }
-
-.search-results { list-style: none; margin: 10px 0 0; padding: 0; }
-.search-results .empty { color: #7c8398; font-size: 13px; padding: 8px 2px; }
-.search-results li + li { border-top: 1px solid #1e2430; }
-
-.search-results button {
-  display: grid; grid-template-columns: 1fr auto; gap: 2px 8px;
-  width: 100%; text-align: left; padding: 9px 8px;
-  background: none; border: none; border-radius: 6px;
-}
-.search-results button:hover { background: #1c222e; }
-.search-results .name { font-size: 14px; }
-.search-results .dist { font-size: 12px; color: #9fc0ff; align-self: center; }
-.search-results .addr {
-  grid-column: 1 / -1; font-size: 12px; color: #7c8398;
-}
-
-.info .dest { color: #9fc0ff; }
-
-/* 주행 화면과 지도가 같은 자리를 쓴다 */
+/* 화면 공통 */
+.screen { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
 
+/* 출발·도착 점 */
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.dot.start { background: #48d17a; }
+.dot.end { background: #ff6b6b; }
+
+/* ── 홈 화면 ────────────────────────────────── */
+.home { flex: 1; padding: 20px 16px; display: flex; flex-direction: column; gap: 18px; }
+
+.home-hero h2 { margin: 0 0 6px; font-size: 19px; letter-spacing: -0.01em; }
+.home-hero p { margin: 0; font-size: 13px; color: #8b93a7; line-height: 1.55; }
+
+.fields { display: flex; align-items: center; gap: 10px; }
+.field-rows {
+  flex: 1; min-width: 0;
+  border: 1px solid #2f3545; border-radius: 12px; overflow: hidden; background: #161b25;
+}
+
+.field {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 13px 14px; text-align: left;
+  background: none; border: none; border-radius: 0; font-size: 14px;
+}
+.field + .field { border-top: 1px solid #232733; }
+.field .label { color: #7c8398; font-size: 12px; width: 26px; flex: none; }
+.field .value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.field .value.muted { color: #9fc0ff; }
+.field .value.placeholder { color: #5f6678; }
+
+.swap {
+  width: 38px; height: 38px; border-radius: 50%; flex: none;
+  display: flex; align-items: center; justify-content: center; font-size: 15px;
+}
+
+.home-note { margin: 0; font-size: 12px; color: #ffd08a; }
+
+.home .primary { padding: 13px; font-size: 15px; border-radius: 10px; }
+
+/* ── 경로 확인 화면 ─────────────────────────── */
 .map { position: absolute; inset: 0; }
 
-/* ── 분할 화면 ──────────────────────────────── */
+.route-badge {
+  /* 카카오 지도가 자체 스택 컨텍스트를 만들므로 위로 올려야 보인다 */
+  position: absolute; z-index: 5; left: 50%; top: 14px; transform: translateX(-50%);
+  padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 700;
+  background: #2b7fff; color: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+
+.route-summary {
+  flex: none; padding: 14px; border-top: 1px solid #232733; background: #141822;
+  display: flex; flex-direction: column; gap: 7px;
+}
+.route-line { display: flex; align-items: center; gap: 9px; font-size: 14px; }
+.route-line .text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.route-meta { margin: 2px 0 4px; font-size: 13px; color: #8b93a7; }
+.route-actions { display: flex; gap: 8px; }
+.route-actions button { flex: 1; padding: 11px; font-size: 14px; border-radius: 9px; }
+
+/* 지도 오버레이 */
+.endpoint-pin {
+  padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  color: #fff; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+}
+.endpoint-pin.start { background: #2f9e5c; }
+.endpoint-pin.end { background: #e5484d; }
+
+.turn-pin {
+  padding: 2px 6px; border-radius: 10px; font-size: 11px; font-weight: 700;
+  background: #ffb454; color: #1a1200; white-space: nowrap;
+}
+.turn-pin.left { background: #9fc0ff; color: #001233; }
+
+.me { font-size: 22px; color: #2b7fff; text-shadow: 0 0 4px #000; }
+
+/* ── 주행 화면 ──────────────────────────────── */
+.walk-head {
+  flex: none; display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; border-bottom: 1px solid #232733; font-size: 13px;
+}
+.walk-head button { padding: 5px 10px; }
+.walk-dest { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.walk-remain { color: #9fc0ff; flex: none; }
+
 .split { position: absolute; inset: 0; display: flex; flex-direction: column; }
 .split-top,
 .split-bottom { position: relative; flex: 1; min-height: 0; overflow: hidden; }
 .split-top { border-bottom: 1px solid #2f3545; }
 
-/* ── 로드뷰 패널 ────────────────────────────── */
+/* 로드뷰 패널 */
 .roadview { position: absolute; inset: 0; background: #0a0d13; }
 .roadview-canvas { position: absolute; inset: 0; }
 
@@ -89,31 +139,26 @@ button:not(:disabled):hover { background: #232937; }
 .roadview-badge {
   position: absolute; left: 12px; bottom: 12px;
   padding: 5px 10px; border-radius: 8px; font-size: 12px;
-  background: rgba(8, 10, 16, 0.7); color: #9fc0ff;
-  backdrop-filter: blur(4px);
+  background: rgba(8, 10, 16, 0.7); color: #9fc0ff; backdrop-filter: blur(4px);
 }
 .roadview-badge.close { color: #1a1200; background: rgba(255, 180, 84, 0.92); font-weight: 700; }
 
-/* ── 카메라 프리뷰 ───────────────────────────── */
+/* 카메라 프리뷰 */
 .camera { position: absolute; inset: 0; background: #05070c; }
-
-.camera-video {
-  width: 100%; height: 100%; object-fit: cover; display: block;
-}
+.camera-video { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 .camera-fallback {
-  /* 화면 상단에 둔다. 가운데는 화살표 자리라 겹치면 둘 다 읽기 어려워진다. */
   position: absolute; top: 0; left: 0; right: 0;
   display: flex; align-items: flex-start; justify-content: center;
-  text-align: center; padding: 20px 24px; font-size: 13px; color: #7c8398;
+  text-align: center; padding: 16px 20px; font-size: 12px; color: #7c8398;
 }
 .camera-fallback .muted { line-height: 1.6; }
 
-/* ── 방향 안내 오버레이 ──────────────────────── */
+/* 방향 안내 오버레이 */
 .overlay {
   position: absolute; inset: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 18px; pointer-events: none;
+  gap: 10px; pointer-events: none;
 }
 
 .arrow {
@@ -121,45 +166,69 @@ button:not(:disabled):hover { background: #232937; }
   transition: transform 220ms ease-out, color 200ms linear;
   filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.55));
 }
+.arrow svg { width: 96px; height: 96px; }
 .arrow.ok { color: #48d17a; }
 .arrow.off { color: #ffb454; }
 
 .instruction {
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
-  padding: 10px 18px; border-radius: 12px;
-  background: rgba(8, 10, 16, 0.62);
-  backdrop-filter: blur(4px);
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 7px 14px; border-radius: 12px;
+  background: rgba(8, 10, 16, 0.62); backdrop-filter: blur(4px);
 }
-.instruction strong { font-size: 22px; letter-spacing: -0.01em; }
+.instruction strong { font-size: 18px; letter-spacing: -0.01em; }
 .instruction .next-turn { font-size: 13px; color: #9fc0ff; }
 
 .overlay-hint { color: #8b93a7; font-size: 14px; }
 
-/* 분할 화면에서는 높이가 절반이라 안내를 줄인다 */
-.split-bottom .overlay { gap: 10px; }
-.split-bottom .arrow svg { width: 96px; height: 96px; }
-.split-bottom .instruction { padding: 7px 14px; }
-.split-bottom .instruction strong { font-size: 18px; }
-
 .overlay-warn {
-  position: absolute; bottom: 14px; left: 14px; right: 14px;
+  position: absolute; bottom: 10px; left: 12px; right: 12px;
   margin: 0; text-align: center; font-size: 12px;
   color: #ffd08a; background: rgba(58, 40, 12, 0.72);
-  padding: 6px 10px; border-radius: 8px;
+  padding: 5px 10px; border-radius: 8px;
 }
 
-/* ── 하단 정보 ──────────────────────────────── */
-.info { padding: 10px 14px; border-top: 1px solid #232733; font-size: 13px; }
-.info p { margin: 4px 0; }
+.info { flex: none; padding: 9px 14px; border-top: 1px solid #232733; font-size: 13px; }
+.info p { margin: 0; }
 .info .src { color: #8b93a7; margin-left: 4px; font-size: 12px; }
 .info .ok { color: #6ee787; }
 .info .off { color: #ffb454; }
 
-/* ── 지도 오버레이 ──────────────────────────── */
-.turn-pin {
-  padding: 2px 6px; border-radius: 10px; font-size: 11px; font-weight: 700;
-  background: #ffb454; color: #1a1200; white-space: nowrap;
+/* ── 장소 검색 시트 ─────────────────────────── */
+.sheet {
+  position: fixed; inset: 0; z-index: 50;
+  background: #0f1115; display: flex; flex-direction: column;
+  padding: 14px; gap: 12px;
 }
-.turn-pin.left { background: #9fc0ff; color: #001233; }
 
-.me { font-size: 22px; color: #2b7fff; text-shadow: 0 0 4px #000; }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; }
+.sheet-head strong { font-size: 15px; }
+
+.search-form { display: flex; gap: 6px; }
+.search-form input {
+  flex: 1; min-width: 0; padding: 10px 12px; font-size: 15px;
+  border-radius: 8px; border: 1px solid #2f3545;
+  background: #161b25; color: #e6e8ec;
+}
+.search-form input::placeholder { color: #5f6678; }
+
+.current-location {
+  text-align: left; padding: 11px 12px; border-radius: 8px;
+  color: #9fc0ff; border-color: #2b3a55;
+}
+
+.search-note { margin: 0; font-size: 12px; color: #ffd08a; }
+.search-error { margin: 0; font-size: 12px; color: #ff9c9c; }
+
+.search-results { list-style: none; margin: 0; padding: 0; overflow: auto; flex: 1; }
+.search-results .empty { color: #7c8398; font-size: 13px; padding: 8px 2px; }
+.search-results li + li { border-top: 1px solid #1e2430; }
+
+.search-results button {
+  display: grid; grid-template-columns: 1fr auto; gap: 2px 8px;
+  width: 100%; text-align: left; padding: 11px 8px;
+  background: none; border: none; border-radius: 6px;
+}
+.search-results button:hover { background: #1c222e; }
+.search-results .name { font-size: 14px; }
+.search-results .dist { font-size: 12px; color: #9fc0ff; align-self: center; }
+.search-results .addr { grid-column: 1 / -1; font-size: 12px; color: #7c8398; }

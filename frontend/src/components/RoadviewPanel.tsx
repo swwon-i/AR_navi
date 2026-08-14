@@ -45,6 +45,11 @@ export function RoadviewPanel({ position, targetBearing, distanceToTurn }: Props
   const client = useRef<any>(null);
   const lastQueried = useRef<Point | null>(null);
   const [coverage, setCoverage] = useState<Coverage>('unknown');
+  /**
+   * SDK 로드가 비동기라, 위치를 이미 가진 채로 마운트되면 파노라마 요청 effect 가
+   * 인스턴스보다 먼저 돌아 아무것도 요청하지 않는다. 준비 상태를 의존성에 넣는다.
+   */
+  const [ready, setReady] = useState(false);
 
   // 최신 목표 방위각. init 이벤트 콜백이 매번 새로 등록되지 않도록 ref 로 들고 있는다.
   const bearingRef = useRef<number | null>(null);
@@ -55,6 +60,7 @@ export function RoadviewPanel({ position, targetBearing, distanceToTurn }: Props
     let cancelled = false;
     let instance: any = null;
     let onInit: (() => void) | null = null;
+    let observer: ResizeObserver | null = null;
 
     loadKakaoSdk()
       .then(() => {
@@ -64,13 +70,24 @@ export function RoadviewPanel({ position, targetBearing, distanceToTurn }: Props
         client.current = new kakao.maps.RoadviewClient();
 
         // 파노라마가 준비된 시점에 시점을 맞춘다. setPanoId 직후에는 아직 초기화 전이다.
-        onInit = () => applyViewpoint(instance, bearingRef.current);
+        onInit = () => {
+          // 컨테이너 크기가 확정된 뒤 relayout 을 부르지 않으면 파노라마가 회색으로 남는다.
+          instance.relayout();
+          applyViewpoint(instance, bearingRef.current);
+        };
         kakao.maps.event.addListener(instance, 'init', onInit);
+
+        // 화면 전환·회전으로 패널 크기가 바뀌어도 다시 맞춰준다.
+        observer = new ResizeObserver(() => instance.relayout());
+        observer.observe(container.current);
+
+        setReady(true);
       })
       .catch((e) => console.error(e));
 
     return () => {
       cancelled = true;
+      observer?.disconnect();
       // 카카오 API 는 addListener 가 핸들을 반환하지 않는다. 등록할 때와 같은 인자로 해제한다.
       if (instance && onInit) kakao.maps.event.removeListener(instance, 'init', onInit);
     };
@@ -93,7 +110,7 @@ export function RoadviewPanel({ position, targetBearing, distanceToTurn }: Props
       setCoverage('available');
       roadview.current.setPanoId(panoId, latLng);
     });
-  }, [position]);
+  }, [ready, position]);
 
   // 파노라마를 목표 방위각으로 돌린다
   useEffect(() => {
