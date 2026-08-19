@@ -8,7 +8,6 @@ interface Props {
   turns: Turn[];
   destination: Place | null;
   position: Point | null;
-  heading: number | null;
   onBack: () => void;
   onStart: () => void;
 }
@@ -19,7 +18,6 @@ export function MapScreen({
   turns,
   destination,
   position,
-  heading,
   onBack,
   onStart,
 }: Props) {
@@ -28,13 +26,7 @@ export function MapScreen({
   return (
     <div className="screen">
       <div className="stage">
-        <RouteMap
-          points={route.points}
-          turns={turns}
-          position={position}
-          heading={heading}
-          showEndpoints
-        />
+        <RouteMap points={route.points} turns={turns} position={position} showEndpoints />
         <div className="route-badge">도보 {minutes}분</div>
       </div>
 

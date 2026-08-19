@@ -7,12 +7,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   bearing,
+  cumulativeDistances,
   distanceMeters,
   extractTurns,
   nearestIndex,
   normalizeDegrees,
   projectOnRoute,
+  routeProgress,
   type Point,
+  type RouteProgress,
   type Turn,
 } from '../lib/geo';
 import { resolveInstruction, type Instruction } from '../lib/guidance';
@@ -32,8 +35,12 @@ export interface Guidance {
   distanceToTurn: number | null;
   /** 도착지까지 남은 직선 거리(m) */
   remaining: number | null;
+  /** 경로를 따라 잰 진행 상황. 화면에 보여줄 "얼마나 왔나"는 이 값이다 */
+  progress: RouteProgress | null;
   /** 현재 위치를 경로 위로 투영한 좌표. 로드뷰가 이 값을 쓴다 */
   snapped: Point | null;
+  /** 투영된 지점이 속한 구간의 시작 인덱스. 지나온 구간을 그릴 때 쓴다 */
+  snappedIndex: number | null;
   /** 경로에서 벗어난 거리(m) */
   offRouteM: number | null;
 }
@@ -44,6 +51,12 @@ export function useGuidance(
   heading: number | null,
 ): Guidance {
   const turns = useMemo(() => (route ? extractTurns(route.points) : []), [route]);
+
+  // 경로가 바뀔 때만 만든다. 진행률을 매 좌표마다 처음부터 더하지 않기 위한 것이다.
+  const cumulative = useMemo(
+    () => (route ? cumulativeDistances(route.points) : null),
+    [route],
+  );
 
   /**
    * 지금 향해 가고 있는 경로 점의 인덱스.
@@ -83,7 +96,9 @@ export function useGuidance(
         upcoming: null,
         distanceToTurn: null,
         remaining: null,
+        progress: null,
         snapped: null,
+        snappedIndex: null,
         offRouteM: null,
       };
     }
@@ -98,10 +113,15 @@ export function useGuidance(
       upcoming,
       distanceToTurn: upcoming ? Math.round(distanceMeters(position, upcoming.point)) : null,
       remaining: Math.round(distanceMeters(position, route.points[route.points.length - 1])),
+      progress:
+        projection && cumulative
+          ? routeProgress(route.points, cumulative, projection, route.totalDistance)
+          : null,
       snapped: projection?.point ?? null,
+      snappedIndex: projection?.index ?? null,
       offRouteM: projection ? Math.round(projection.offRouteM) : null,
     };
-  }, [route, position, heading, turns, targetIndex]);
+  }, [route, position, heading, turns, targetIndex, cumulative]);
 
   // 안내 문구는 히스테리시스를 거쳐 결정한다. 직전 값이 입력에 포함되므로 ref 로 들고 있는다.
   const previousInstruction = useRef<Instruction | null>(null);

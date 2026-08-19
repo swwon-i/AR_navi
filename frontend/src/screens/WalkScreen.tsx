@@ -1,16 +1,20 @@
-import type { MutableRefObject } from 'react';
+import { useState, type MutableRefObject } from 'react';
 import { ArrowOverlay } from '../components/ArrowOverlay';
 import { CameraView } from '../components/CameraView';
 import { RoadviewPanel } from '../components/RoadviewPanel';
+import { RouteMap } from '../components/RouteMap';
+import { RouteProgressPip } from '../components/RouteProgressPip';
 import type { CameraStatus } from '../hooks/useCamera';
 import type { Guidance } from '../hooks/useGuidance';
-import type { Point } from '../lib/geo';
+import { traveledPath, type Point } from '../lib/geo';
 import type { Place } from '../lib/places';
+import type { Route } from '../lib/route';
 
 /** 이 거리 이상 벗어나면 경로 이탈로 본다. GPS 오차보다 충분히 커야 한다 */
 const OFF_ROUTE_M = 40;
 
 interface Props {
+  route: Route;
   guidance: Guidance;
   position: Point | null;
   heading: number | null;
@@ -31,6 +35,7 @@ interface Props {
  * 대조를 사용자 머릿속이 아니라 화면에서 하게 만드는 구성이다.
  */
 export function WalkScreen({
+  route,
   guidance,
   position,
   heading,
@@ -39,13 +44,17 @@ export function WalkScreen({
   camera,
   onBack,
 }: Props) {
+  // 지도를 펼쳐도 아래쪽 카메라·화살표는 그대로 두어 안내가 끊기지 않게 한다.
+  const [mapOpen, setMapOpen] = useState(false);
+
   return (
     <div className="screen">
       <header className="walk-head">
         <button type="button" onClick={onBack}>← 경로</button>
         <span className="walk-dest">{destination?.name ?? '주행 중'}</span>
+        {/* 직선거리가 아니라 경로를 따라 남은 거리다. 길이 꺾이면 둘이 크게 다르다 */}
         <span className="walk-remain">
-          {guidance.remaining !== null ? `${guidance.remaining}m 남음` : ''}
+          {guidance.progress !== null ? `${Math.round(guidance.progress.remainingM)}m 남음` : ''}
         </span>
       </header>
 
@@ -58,16 +67,56 @@ export function WalkScreen({
       <div className="stage">
         <div className="split">
           <div className="split-top">
-            {/*
-              GPS 원본이 아니라 경로 위로 투영한 좌표를 넘긴다. 원본을 쓰면 도심
-              GPS 오차(±10~20m)로 평행한 옆 골목 파노라마가 잡혀, 걷는 길과 다른
-              풍경이 뜬다.
-            */}
-            <RoadviewPanel
-              position={guidance.snapped ?? position}
-              targetBearing={guidance.target}
-              distanceToTurn={guidance.distanceToTurn}
-            />
+            {mapOpen ? (
+              <>
+                {/*
+                  전체 경로 중 어디쯤인지 보려는 것이므로 현재 위치를 따라가지 않는다.
+                  회전 핀도 이 크기에서는 과해서 끈다.
+                */}
+                <RouteMap
+                  points={route.points}
+                  turns={guidance.turns}
+                  position={guidance.snapped ?? position}
+                  traveled={
+                    guidance.snapped && guidance.snappedIndex !== null
+                      ? traveledPath(route.points, guidance.snappedIndex, guidance.snapped)
+                      : null
+                  }
+                  followPosition={false}
+                  showTurns={false}
+                  showEndpoints
+                />
+                <div className="map-progress">
+                  {guidance.progress !== null &&
+                    `${Math.round(guidance.progress.traveledM)} / ` +
+                    `${Math.round(guidance.progress.totalM)}m · ` +
+                    `${Math.round(guidance.progress.ratio * 100)}%`}
+                </div>
+                <button type="button" className="map-close" onClick={() => setMapOpen(false)}>
+                  닫기
+                </button>
+              </>
+            ) : (
+              <>
+                {/*
+                  GPS 원본이 아니라 경로 위로 투영한 좌표를 넘긴다. 원본을 쓰면 도심
+                  GPS 오차(±10~20m)로 평행한 옆 골목 파노라마가 잡혀, 걷는 길과 다른
+                  풍경이 뜬다.
+                */}
+                <RoadviewPanel
+                  position={guidance.snapped ?? position}
+                  targetBearing={guidance.target}
+                  distanceToTurn={guidance.distanceToTurn}
+                />
+                <RouteProgressPip
+                  points={route.points}
+                  snapped={guidance.snapped}
+                  snappedIndex={guidance.snappedIndex}
+                  progress={guidance.progress}
+                  onExpand={() => setMapOpen(true)}
+                />
+              </>
+            )}
           </div>
           <div className="split-bottom">
             <CameraView videoRef={camera.videoRef} status={camera.status} error={camera.error} />

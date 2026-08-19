@@ -120,7 +120,6 @@ export default function App() {
           turns={guidance.turns}
           destination={destination}
           position={nav.position}
-          heading={nav.heading}
           onBack={() => setScreen('home')}
           onStart={startWalking}
         />
@@ -128,6 +127,7 @@ export default function App() {
 
       {screen === 'walk' && route && (
         <WalkScreen
+          route={route}
           guidance={guidance}
           position={nav.position}
           heading={nav.heading}

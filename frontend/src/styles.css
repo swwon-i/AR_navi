@@ -105,7 +105,15 @@ button.primary:not(:disabled):hover { background: #4a92ff; }
 }
 .turn-pin.left { background: #9fc0ff; color: #001233; }
 
-.me { font-size: 22px; color: #2b7fff; text-shadow: 0 0 4px #000; }
+/*
+ * 현재 위치. CustomOverlay 는 content 의 중심을 좌표에 맞추므로 따로 보정하지 않는다.
+ * 흰 테두리는 경로 선 위에 겹쳤을 때 점이 묻히지 않게 하는 역할이다.
+ */
+.me {
+  width: 16px; height: 16px; border-radius: 50%;
+  background: #2b7fff; border: 3px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.6);
+}
 
 /* ── 주행 화면 ──────────────────────────────── */
 .walk-head {
@@ -138,6 +146,37 @@ button.primary:not(:disabled):hover { background: #4a92ff; }
   background: rgba(8, 10, 16, 0.7); color: #9fc0ff; backdrop-filter: blur(4px);
 }
 .roadview-badge.close { color: #1a1200; background: rgba(255, 180, 84, 0.92); font-weight: 700; }
+
+/* 진행 상황 PiP — 로드뷰 위 우측 상단 */
+.pip {
+  position: absolute; right: 10px; top: 10px; z-index: 4;
+  /* 손가락으로 누르기에 충분한 크기. 로드뷰를 과하게 가리지 않는 선에서 잡았다 */
+  width: 96px; padding: 6px 6px 4px;
+  display: flex; flex-direction: column; align-items: stretch; gap: 2px;
+  border: 1px solid #2f3545; border-radius: 10px;
+  background: rgba(8, 10, 16, 0.78); backdrop-filter: blur(4px);
+  cursor: pointer;
+}
+.pip svg { width: 100%; height: auto; display: block; }
+.pip-route { fill: none; stroke: #39415a; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+.pip-walked { fill: none; stroke: #2b7fff; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+.pip-end { fill: #ff6b6b; }
+.pip-me { fill: #fff; stroke: #2b7fff; stroke-width: 3; }
+.pip-label { font-size: 11px; color: #9fc0ff; text-align: center; font-variant-numeric: tabular-nums; }
+
+/* 펼친 지도 (위쪽 절반) */
+.map-progress {
+  position: absolute; left: 12px; bottom: 12px; z-index: 4;
+  padding: 5px 10px; border-radius: 8px; font-size: 12px;
+  background: rgba(8, 10, 16, 0.78); color: #9fc0ff; backdrop-filter: blur(4px);
+  font-variant-numeric: tabular-nums;
+}
+.map-close {
+  position: absolute; right: 10px; top: 10px; z-index: 4;
+  padding: 6px 12px; border-radius: 8px;
+  border: 1px solid #2f3545; background: rgba(8, 10, 16, 0.82); color: #e6e8ec;
+  font-size: 12px; cursor: pointer;
+}
 
 /* 카메라 프리뷰 */
 .camera { position: absolute; inset: 0; background: #05070c; }

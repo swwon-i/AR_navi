@@ -180,6 +180,83 @@ export function projectOnRoute(points: Point[], position: Point): RouteProjectio
   return best;
 }
 
+/**
+ * 시작점부터 각 점까지의 누적 거리(m). `cumulative[i]` = `points[0]`~`points[i]`.
+ *
+ * 진행률은 위치가 갱신될 때마다 다시 구해야 하는데, 매번 경로 전체를 더하면
+ * 낭비다. 경로는 한 번 정해지면 바뀌지 않으므로 이 배열을 한 번만 만들어 둔다.
+ */
+export function cumulativeDistances(points: Point[]): number[] {
+  const out = new Array<number>(points.length);
+  out[0] = 0;
+  for (let i = 1; i < points.length; i++) {
+    out[i] = out[i - 1] + distanceMeters(points[i - 1], points[i]);
+  }
+  return out;
+}
+
+export interface RouteProgress {
+  /** 경로를 따라 걸어온 거리(m) */
+  traveledM: number;
+  /** 경로 전체 길이(m) */
+  totalM: number;
+  /** 경로를 따라 남은 거리(m). 직선거리와 달리 실제로 걸어야 할 거리다 */
+  remainingM: number;
+  /** 0~1 */
+  ratio: number;
+}
+
+/**
+ * 경로 위 진행 상황.
+ *
+ * 도착지까지의 직선거리는 경로가 꺾이면 실제 걸을 거리와 크게 어긋난다. 여기서는
+ * 투영점까지의 경로 길이를 재므로 "얼마나 왔나"가 실제 보행 거리로 나온다.
+ *
+ * 경로를 벗어나도 투영점 기준이라 값이 유지된다 (이탈 자체는 offRouteM 이 알린다).
+ *
+ * @param totalOverrideM 표시에 쓸 총거리. 폴리라인을 더한 값은 카카오가 준 공식
+ *   총거리보다 조금 짧게 나온다(같은 경로를 374m / 339m 로 재는 식). 두 화면이
+ *   다른 숫자를 보이면 안 되므로, 위치는 폴리라인으로 재되 거리는 공식 값으로
+ *   환산해 내보낸다.
+ */
+export function routeProgress(
+  points: Point[],
+  cumulative: number[],
+  projection: RouteProjection,
+  totalOverrideM?: number,
+): RouteProgress | null {
+  if (points.length < 2) return null;
+
+  const polylineM = cumulative[cumulative.length - 1];
+  // 구간 시작점까지의 누적 + 그 구간 안에서 투영점까지의 거리
+  const walkedOnPolyline = Math.min(
+    polylineM,
+    cumulative[projection.index] + distanceMeters(points[projection.index], projection.point),
+  );
+  const ratio = polylineM === 0 ? 0 : walkedOnPolyline / polylineM;
+
+  const totalM = totalOverrideM ?? polylineM;
+  const traveledM = totalM * ratio;
+
+  return {
+    traveledM,
+    totalM,
+    remainingM: Math.max(0, totalM - traveledM),
+    ratio,
+  };
+}
+
+/**
+ * 지나온 구간의 좌표열. 경로 시작부터 투영된 현재 위치까지다.
+ *
+ * 진행률을 경로 위에 색으로 보여줄 때 쓴다. 경로 점 개수를 비율로 자르면 안 되는데,
+ * 점 간격이 28~50m 로 고르지 않아 "절반쯤 왔다"와 "점의 절반을 지났다"가 다르기
+ * 때문이다. 투영 결과의 구간 인덱스를 쓰면 그 문제가 없다.
+ */
+export function traveledPath(points: Point[], index: number, snapped: Point): Point[] {
+  return [...points.slice(0, index + 1), snapped];
+}
+
 /** 경로에서 현재 위치와 가장 가까운 점의 인덱스. */
 export function nearestIndex(points: Point[], current: Point): number {
   let best = 0;
