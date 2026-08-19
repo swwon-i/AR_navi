@@ -10,11 +10,25 @@ interface Props {
   distanceToTurn: number | null;
 }
 
-/** 파노라마를 다시 요청할 최소 이동 거리(m). 매 좌표마다 부르면 통신·발열이 심하다 (스펙 4장). */
-const REFRESH_DISTANCE_M = 25;
+/**
+ * 파노라마를 다시 요청할 최소 이동 거리(m).
+ *
+ * 매 좌표마다 부르면 통신·발열이 심해 문턱을 둔다 (스펙 4장). 다만 25m 로 잡았더니
+ * 보행 속도(1.3m/s)에서 최대 19초, 평균 10초쯤 지난 풍경이 떠서 "지나가고 나서야
+ * 로드뷰가 바뀐다"는 문제가 됐다.
+ *
+ * 로드뷰 파노라마는 대략 10m 간격으로 촬영돼 있다 (가로수길·화곡 두 곳에서 확인).
+ * 그보다 촘촘히 요청해도 같은 파노라마가 잡혀 낭비이므로 촬영 간격에 맞춘다.
+ */
+const REFRESH_DISTANCE_M = 10;
 
-/** 이 반경 안에 로드뷰가 없으면 미지원 구간으로 본다 */
-const SEARCH_RADIUS_M = 50;
+/**
+ * 이 반경 안에 로드뷰가 없으면 미지원 구간으로 본다.
+ *
+ * 넓게 잡으면 뒤쪽이나 평행한 옆 골목 파노라마까지 후보에 들어와 지금 걷는 길과
+ * 다른 풍경이 잡힌다. 촬영 간격의 두어 배면 충분하다.
+ */
+const SEARCH_RADIUS_M = 25;
 
 type Coverage = 'unknown' | 'available' | 'none';
 
@@ -133,7 +147,7 @@ export function RoadviewPanel({ position, targetBearing, distanceToTurn }: Props
 
       {coverage === 'available' && (
         <div className={`roadview-badge ${turnClose ? 'close' : ''}`}>
-          {turnClose ? '이 풍경이 보이면 여기서 회전' : '이 방향으로 진행'}
+          {turnClose ? '이 풍경이 보이면 여기서 회전' : '곧 보게 될 풍경'}
         </div>
       )}
     </div>

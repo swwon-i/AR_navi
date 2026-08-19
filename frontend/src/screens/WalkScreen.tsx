@@ -99,12 +99,15 @@ export function WalkScreen({
             ) : (
               <>
                 {/*
-                  GPS 원본이 아니라 경로 위로 투영한 좌표를 넘긴다. 원본을 쓰면 도심
+                  경로를 따라 조금 앞선 지점을 넘긴다. 지금 자리를 띄우면 이미 눈으로
+                  본 장면이라 대조할 것이 없다.
+
+                  GPS 원본이 아니라 경로 위 좌표라는 점도 중요하다. 원본을 쓰면 도심
                   GPS 오차(±10~20m)로 평행한 옆 골목 파노라마가 잡혀, 걷는 길과 다른
                   풍경이 뜬다.
                 */}
                 <RoadviewPanel
-                  position={guidance.snapped ?? position}
+                  position={guidance.lookahead ?? guidance.snapped ?? position}
                   targetBearing={guidance.target}
                   distanceToTurn={guidance.distanceToTurn}
                 />

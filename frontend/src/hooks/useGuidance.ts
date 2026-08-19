@@ -8,8 +8,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   bearing,
   cumulativeDistances,
+  distanceAlongRoute,
   distanceMeters,
   extractTurns,
+  interpolateAlongRoute,
   nearestIndex,
   normalizeDegrees,
   projectOnRoute,
@@ -23,6 +25,17 @@ import type { Route } from '../lib/route';
 
 /** 목표 지점을 지났다고 볼 반경(m) */
 const WAYPOINT_RADIUS_M = 8;
+
+/**
+ * 로드뷰를 현재 위치보다 이만큼 앞에서 보여준다.
+ *
+ * 걷는 중에는 "지금 서 있는 자리"보다 "곧 보게 될 풍경"이 쓸모 있다. 지금 자리를
+ * 띄우면 이미 눈으로 본 장면을 다시 보는 셈이라, 대조할 것이 없다.
+ *
+ * 보행 1.3m/s 기준 약 12초 앞이다. 더 멀리 잡으면 화면과 실제 풍경의 간극이 커져
+ * 대조가 어렵고, 짧으면 앞당긴 효과가 없다.
+ */
+const ROADVIEW_LOOKAHEAD_M = 15;
 
 export interface Guidance {
   turns: Turn[];
@@ -41,6 +54,8 @@ export interface Guidance {
   snapped: Point | null;
   /** 투영된 지점이 속한 구간의 시작 인덱스. 지나온 구간을 그릴 때 쓴다 */
   snappedIndex: number | null;
+  /** 경로를 따라 조금 앞선 좌표. 로드뷰가 이 지점의 풍경을 보여준다 */
+  lookahead: Point | null;
   /** 경로에서 벗어난 거리(m) */
   offRouteM: number | null;
 }
@@ -99,6 +114,7 @@ export function useGuidance(
         progress: null,
         snapped: null,
         snappedIndex: null,
+        lookahead: null,
         offRouteM: null,
       };
     }
@@ -119,6 +135,14 @@ export function useGuidance(
           : null,
       snapped: projection?.point ?? null,
       snappedIndex: projection?.index ?? null,
+      lookahead:
+        projection && cumulative
+          ? interpolateAlongRoute(
+              route.points,
+              cumulative,
+              distanceAlongRoute(route.points, cumulative, projection) + ROADVIEW_LOOKAHEAD_M,
+            )
+          : null,
       offRouteM: projection ? Math.round(projection.offRouteM) : null,
     };
   }, [route, position, heading, turns, targetIndex, cumulative]);

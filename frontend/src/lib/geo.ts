@@ -195,6 +195,44 @@ export function cumulativeDistances(points: Point[]): number[] {
   return out;
 }
 
+/** 경로 시작부터 투영된 현재 위치까지의 거리(m). */
+export function distanceAlongRoute(
+  points: Point[],
+  cumulative: number[],
+  projection: RouteProjection,
+): number {
+  // 구간 시작점까지의 누적 + 그 구간 안에서 투영점까지의 거리
+  return Math.min(
+    cumulative[cumulative.length - 1],
+    cumulative[projection.index] + distanceMeters(points[projection.index], projection.point),
+  );
+}
+
+/**
+ * 경로를 따라 시작점에서 distanceM 만큼 떨어진 좌표.
+ *
+ * 경로 밖으로는 나가지 않도록 양끝에서 자른다. 꼭짓점이 아니라 구간 위의 임의
+ * 지점을 돌려주므로, 점 간격(28~50m)보다 짧은 거리도 제대로 표현된다.
+ */
+export function interpolateAlongRoute(
+  points: Point[],
+  cumulative: number[],
+  distanceM: number,
+): Point {
+  const total = cumulative[cumulative.length - 1];
+  const d = Math.max(0, Math.min(total, distanceM));
+
+  let i = 0;
+  while (i < cumulative.length - 2 && cumulative[i + 1] < d) i++;
+
+  const segment = cumulative[i + 1] - cumulative[i];
+  const t = segment === 0 ? 0 : (d - cumulative[i]) / segment;
+  return [
+    points[i][0] + (points[i + 1][0] - points[i][0]) * t,
+    points[i][1] + (points[i + 1][1] - points[i][1]) * t,
+  ];
+}
+
 export interface RouteProgress {
   /** 경로를 따라 걸어온 거리(m) */
   traveledM: number;
@@ -228,11 +266,7 @@ export function routeProgress(
   if (points.length < 2) return null;
 
   const polylineM = cumulative[cumulative.length - 1];
-  // 구간 시작점까지의 누적 + 그 구간 안에서 투영점까지의 거리
-  const walkedOnPolyline = Math.min(
-    polylineM,
-    cumulative[projection.index] + distanceMeters(points[projection.index], projection.point),
-  );
+  const walkedOnPolyline = distanceAlongRoute(points, cumulative, projection);
   const ratio = polylineM === 0 ? 0 : walkedOnPolyline / polylineM;
 
   const totalM = totalOverrideM ?? polylineM;
