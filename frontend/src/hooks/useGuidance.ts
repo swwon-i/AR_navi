@@ -37,6 +37,22 @@ const WAYPOINT_RADIUS_M = 8;
  */
 const ROADVIEW_LOOKAHEAD_M = 15;
 
+/**
+ * 방향 표시를 로드뷰 위치보다 이만큼 더 앞에 놓는다.
+ *
+ * 파노라마가 서 있는 자리에 표시를 두면 발밑이라 보이지 않는다. 충분히 앞에 둬야
+ * 풍경 속 한 지점으로 보이고 "저기로 가라"가 성립한다.
+ */
+const MARKER_AHEAD_M = 25;
+
+/**
+ * 다음 회전이 이 거리 안이면 표시를 회전 지점에 놓는다.
+ *
+ * 일정 거리 앞에 기계적으로 두면 회전 직전에 표시가 코너를 지나쳐 엉뚱한 방향을
+ * 가리킨다. 회전이 가까울 때는 "여기서 꺾어라"를 그대로 보여주는 편이 맞다.
+ */
+const MARKER_TURN_RANGE_M = 40;
+
 export interface Guidance {
   turns: Turn[];
   /** 목표 방위각 */
@@ -56,6 +72,8 @@ export interface Guidance {
   snappedIndex: number | null;
   /** 경로를 따라 조금 앞선 좌표. 로드뷰가 이 지점의 풍경을 보여준다 */
   lookahead: Point | null;
+  /** 로드뷰 풍경 위에 "이쪽으로" 표시를 박을 좌표 */
+  marker: Point | null;
   /** 경로에서 벗어난 거리(m) */
   offRouteM: number | null;
 }
@@ -115,6 +133,7 @@ export function useGuidance(
         snapped: null,
         snappedIndex: null,
         lookahead: null,
+        marker: null,
         offRouteM: null,
       };
     }
@@ -123,11 +142,28 @@ export function useGuidance(
     const upcoming = turns.find((t) => t.index >= targetIndex) ?? null;
     const projection = projectOnRoute(route.points, position);
 
+    const walked =
+      projection && cumulative ? distanceAlongRoute(route.points, cumulative, projection) : null;
+
+    // 회전이 가까우면 회전 지점, 아니면 경로를 따라 일정 거리 앞
+    const turnDistance = upcoming ? distanceMeters(position, upcoming.point) : null;
+    const marker =
+      upcoming && turnDistance !== null && turnDistance <= MARKER_TURN_RANGE_M
+        ? upcoming.point
+        : walked !== null && cumulative
+          ? interpolateAlongRoute(
+              route.points,
+              cumulative,
+              walked + ROADVIEW_LOOKAHEAD_M + MARKER_AHEAD_M,
+            )
+          : null;
+
     return {
       target,
+      marker,
       delta,
       upcoming,
-      distanceToTurn: upcoming ? Math.round(distanceMeters(position, upcoming.point)) : null,
+      distanceToTurn: turnDistance === null ? null : Math.round(turnDistance),
       remaining: Math.round(distanceMeters(position, route.points[route.points.length - 1])),
       progress:
         projection && cumulative
@@ -136,12 +172,8 @@ export function useGuidance(
       snapped: projection?.point ?? null,
       snappedIndex: projection?.index ?? null,
       lookahead:
-        projection && cumulative
-          ? interpolateAlongRoute(
-              route.points,
-              cumulative,
-              distanceAlongRoute(route.points, cumulative, projection) + ROADVIEW_LOOKAHEAD_M,
-            )
+        walked !== null && cumulative
+          ? interpolateAlongRoute(route.points, cumulative, walked + ROADVIEW_LOOKAHEAD_M)
           : null,
       offRouteM: projection ? Math.round(projection.offRouteM) : null,
     };

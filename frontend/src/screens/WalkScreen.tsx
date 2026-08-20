@@ -109,6 +109,7 @@ export function WalkScreen({
                 <RoadviewPanel
                   position={guidance.lookahead ?? guidance.snapped ?? position}
                   targetBearing={guidance.target}
+                  marker={guidance.marker}
                   distanceToTurn={guidance.distanceToTurn}
                 />
                 <RouteProgressPip

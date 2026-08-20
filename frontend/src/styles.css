@@ -147,6 +147,38 @@ button.primary:not(:disabled):hover { background: #4a92ff; }
 }
 .roadview-badge.close { color: #1a1200; background: rgba(255, 180, 84, 0.92); font-weight: 700; }
 
+/*
+ * 풍경 위에 박히는 방향 표시. 카카오 CustomOverlay 안에 들어가므로 컴포넌트가 아니라
+ * 문자열 HTML 로 만들어진다. 오버레이는 content 의 중심을 좌표에 맞춘다.
+ */
+.rv-marker {
+  padding: 5px 11px; border-radius: 999px;
+  background: rgba(43, 127, 255, 0.95); color: #fff;
+  font-size: 12px; font-weight: 700; white-space: nowrap;
+  border: 2px solid #fff; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+}
+
+/* 표시가 시야 밖일 때 어느 쪽으로 돌릴지 알려주는 가장자리 힌트 */
+.rv-hint {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 4;
+  padding: 10px 8px; border-radius: 8px;
+  background: rgba(43, 127, 255, 0.85); color: #fff;
+  font-size: 20px; font-weight: 700; line-height: 1;
+  pointer-events: none;
+}
+.rv-hint.left { left: 8px; }
+.rv-hint.right { right: 8px; }
+
+/*
+ * 수동 조작 복귀 버튼. 좌하단은 배지, 우상단은 진행 상황 PiP 가 쓰므로 우하단에 둔다.
+ */
+.roadview-recenter {
+  position: absolute; right: 12px; bottom: 12px; z-index: 5;
+  padding: 7px 13px; border-radius: 8px;
+  border: 1px solid #2b7fff; background: rgba(43, 127, 255, 0.92); color: #fff;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+}
+
 /* 진행 상황 PiP — 로드뷰 위 우측 상단 */
 .pip {
   position: absolute; right: 10px; top: 10px; z-index: 4;
