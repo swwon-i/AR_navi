@@ -94,6 +94,16 @@ export function RoadviewPanel({ position, targetBearing, marker, distanceToTurn 
   /** 방향 표시가 시야 밖일 때 어느 쪽으로 돌려야 하는지. 화면 안이면 null */
   const [offScreen, setOffScreen] = useState<'left' | 'right' | null>(null);
 
+  /**
+   * 파노라마가 실제로 떠 있는지.
+   *
+   * 인스턴스가 만들어진 것과 파노라마가 들어온 것은 다르다. 파노라마가 없는 로드뷰에
+   * 오버레이를 붙이면 SDK 내부에서 예외가 나고, 그게 렌더 중이면 화면이 통째로
+   * 날아간다. 지도를 펼쳤다 닫아 패널이 다시 마운트될 때 실제로 그랬다 — 그때는
+   * 표시할 좌표가 이미 있어서 파노라마보다 오버레이가 먼저 붙는다.
+   */
+  const [panoReady, setPanoReady] = useState(false);
+
   // 최신 값들. 이벤트 콜백과 버튼 핸들러가 오래된 값을 잡지 않도록 ref 로 들고 있는다.
   const bearingRef = useRef<number | null>(null);
   bearingRef.current = targetBearing;
@@ -159,7 +169,12 @@ export function RoadviewPanel({ position, targetBearing, marker, distanceToTurn 
         return;
       }
       setCoverage('available');
-      roadview.current.setPanoId(panoId, latLng);
+      // 조회는 비동기다. 응답이 오기 전에 패널이 사라졌을 수 있다.
+      try {
+        roadview.current?.setPanoId(panoId, latLng);
+      } catch (e) {
+        console.error('파노라마를 띄우지 못했다', e);
+      }
     });
   }, []);
 
@@ -199,6 +214,7 @@ export function RoadviewPanel({ position, targetBearing, marker, distanceToTurn 
         onInit = () => {
           // 컨테이너 크기가 확정된 뒤 relayout 을 부르지 않으면 파노라마가 회색으로 남는다.
           instance.relayout();
+          setPanoReady(true);
           faceForward(instance);
           updateOffScreen();
         };
@@ -210,6 +226,7 @@ export function RoadviewPanel({ position, targetBearing, marker, distanceToTurn 
          * 파노라마 변경 이벤트에서 다시 맞춘다.
          */
         onPanoId = () => {
+          setPanoReady(true);
           faceForward(instance);
           updateOffScreen();
         };
@@ -276,7 +293,8 @@ export function RoadviewPanel({ position, targetBearing, marker, distanceToTurn 
    * 깜빡인다.
    */
   useEffect(() => {
-    if (!ready || !roadview.current) return;
+    // 파노라마가 들어오기 전에 붙이면 SDK 가 예외를 던진다 (panoReady 설명 참고).
+    if (!panoReady || !roadview.current) return;
 
     if (!marker) {
       markerOverlay.current?.setMap(null);
@@ -285,21 +303,29 @@ export function RoadviewPanel({ position, targetBearing, marker, distanceToTurn 
       return;
     }
 
-    const latLng = new kakao.maps.LatLng(marker[1], marker[0]);
-    if (!markerOverlay.current) {
-      markerOverlay.current = new kakao.maps.CustomOverlay({
-        position: latLng,
-        content: '<div class="rv-marker">이쪽</div>',
-        altitude: MARKER_ALTITUDE_M,
-        range: MARKER_RANGE_M,
-      });
-      markerOverlay.current.setMap(roadview.current);
-    } else {
-      markerOverlay.current.setPosition(latLng);
+    // SDK 호출이 실패해도 화면 전체가 날아가지 않게 막는다. 표시는 안내의 보조 수단이라
+    // 없어도 카메라·화살표 안내는 계속돼야 한다.
+    try {
+      const latLng = new kakao.maps.LatLng(marker[1], marker[0]);
+      if (!markerOverlay.current) {
+        markerOverlay.current = new kakao.maps.CustomOverlay({
+          position: latLng,
+          content: '<div class="rv-marker">이쪽</div>',
+          altitude: MARKER_ALTITUDE_M,
+          range: MARKER_RANGE_M,
+        });
+        markerOverlay.current.setMap(roadview.current);
+      } else {
+        markerOverlay.current.setPosition(latLng);
+      }
+    } catch (e) {
+      console.error('방향 표시를 올리지 못했다', e);
+      markerOverlay.current = null;
+      return;
     }
 
     updateOffScreen();
-  }, [ready, marker, updateOffScreen]);
+  }, [panoReady, marker, updateOffScreen]);
 
   const turnClose = distanceToTurn !== null && distanceToTurn <= 30;
 
