@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { loadKakaoSdk } from '../lib/kakao';
 import { bearing, distanceMeters, normalizeDegrees, type Point } from '../lib/geo';
+import type { MarkerKind } from '../hooks/useGuidance';
 
 interface Props {
   position: Point | null;
   /** 지금 향해야 하는 방위각. 파노라마가 새로 뜰 때 이 방향을 보게 맞춘다 */
   targetBearing: number | null;
-  /** 풍경 위에 "이쪽으로" 표시를 박을 좌표 */
+  /** 풍경 위에 표시를 박을 좌표 */
   marker: Point | null;
+  /** 그 표시가 길 안내 이정표인지 목적지인지 */
+  markerKind: MarkerKind;
   /** 다음 회전까지 남은 거리(m). 회전이 가까우면 강조 표시한다 */
   distanceToTurn: number | null;
 }
@@ -40,8 +43,23 @@ const SEARCH_RADIUS_M = 25;
  */
 const OFF_SCREEN_DEG = 40;
 
-/** 표시의 고도(m). 0이면 노면에 붙어 잘 안 보이고, 너무 높으면 하늘에 뜬다 */
-const MARKER_ALTITUDE_M = 3;
+/**
+ * 표시의 고도(m). 로드뷰 촬영 높이(차 지붕)에 맞춘 값이다.
+ *
+ * 화면에서의 각도를 만드는 것은 표시의 높이가 아니라 **카메라와의 높이 차이**다.
+ *
+ *   올려본각 = atan((표시 높이 − 카메라 높이) / 거리)
+ *
+ * 촬영 높이와 같게 두면 높이 차가 0 이 되어 각도도 거리와 무관하게 0° — 언제나
+ * 지평선 위에 놓인다. 처음엔 간판 높이(7m)로 띄웠는데, 그러면 가까워질수록 위로
+ * 밀려나 정작 도착 직전에 화면 밖으로 사라졌다 (10m 에서 35° 위, 3m 에서 67° 위).
+ *
+ * 실제 촬영 높이가 2.5m 여서 0.3m 어긋나더라도 10m 에서 1.7° 아래에 그쳐 티가 나지
+ * 않는다. 지역마다 조금 다를 수 있으니 표시가 처지면 이 값만 올리면 된다.
+ */
+const MARKER_ALTITUDE_M = 2.2;
+
+const MARKER_LABEL: Record<MarkerKind, string> = { waypoint: '이쪽', destination: '도착지' };
 
 /** 이 거리 안에서만 표시가 보인다 */
 const MARKER_RANGE_M = 120;
@@ -69,7 +87,13 @@ function applyViewpoint(instance: any, pan: number | null) {
  *
  * 로드뷰가 없는 구간에서는 패널만 비고 카메라·화살표 안내는 그대로 계속된다 (스펙 2-5).
  */
-export function RoadviewPanel({ position, targetBearing, marker, distanceToTurn }: Props) {
+export function RoadviewPanel({
+  position,
+  targetBearing,
+  marker,
+  markerKind,
+  distanceToTurn,
+}: Props) {
   const container = useRef<HTMLDivElement>(null);
   const roadview = useRef<any>(null);
   const client = useRef<any>(null);
@@ -307,16 +331,20 @@ export function RoadviewPanel({ position, targetBearing, marker, distanceToTurn 
     // 없어도 카메라·화살표 안내는 계속돼야 한다.
     try {
       const latLng = new kakao.maps.LatLng(marker[1], marker[0]);
+      const content = `<div class="rv-marker ${markerKind}">${MARKER_LABEL[markerKind]}</div>`;
+
       if (!markerOverlay.current) {
         markerOverlay.current = new kakao.maps.CustomOverlay({
           position: latLng,
-          content: '<div class="rv-marker">이쪽</div>',
+          content,
           altitude: MARKER_ALTITUDE_M,
           range: MARKER_RANGE_M,
         });
         markerOverlay.current.setMap(roadview.current);
       } else {
+        // 종류가 바뀌어도 다시 만들지 않는다. 재생성하면 전환할 때 깜빡인다.
         markerOverlay.current.setPosition(latLng);
+        markerOverlay.current.setContent(content);
       }
     } catch (e) {
       console.error('방향 표시를 올리지 못했다', e);
@@ -325,7 +353,7 @@ export function RoadviewPanel({ position, targetBearing, marker, distanceToTurn 
     }
 
     updateOffScreen();
-  }, [panoReady, marker, updateOffScreen]);
+  }, [panoReady, marker, markerKind, updateOffScreen]);
 
   const turnClose = distanceToTurn !== null && distanceToTurn <= 30;
 

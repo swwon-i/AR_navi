@@ -26,6 +26,13 @@ interface Props {
     error: string | null;
   };
   onBack: () => void;
+  /**
+   * 경로 끝에서 직접 안내를 끝낸다. 완료 상태에서는 null 이라 버튼이 사라진다.
+   *
+   * 자동 판정은 경로 잔여 10m 인데 GPS 가 길 방향으로 튀면 그 구간을 건너뛸 수 있다.
+   * 그러면 판정이 영영 안 걸려 주행 화면에 갇히므로 손으로 끝낼 길을 둔다.
+   */
+  onFinishManually: (() => void) | null;
 }
 
 /**
@@ -43,6 +50,7 @@ export function WalkScreen({
   destination,
   camera,
   onBack,
+  onFinishManually,
 }: Props) {
   // 지도를 펼쳐도 아래쪽 카메라·화살표는 그대로 두어 안내가 끊기지 않게 한다.
   const [mapOpen, setMapOpen] = useState(false);
@@ -110,6 +118,7 @@ export function WalkScreen({
                   position={guidance.lookahead ?? guidance.snapped ?? position}
                   targetBearing={guidance.target}
                   marker={guidance.marker}
+                  markerKind={guidance.markerKind}
                   distanceToTurn={guidance.distanceToTurn}
                 />
                 <RouteProgressPip
@@ -130,7 +139,15 @@ export function WalkScreen({
               distanceToTurn={guidance.distanceToTurn}
               nextTurnDirection={guidance.upcoming?.direction ?? null}
               headingSource={headingSource}
+              arrival={guidance.arrival}
+              remainingM={guidance.progress?.remainingM ?? null}
             />
+
+            {guidance.canFinishManually && onFinishManually && (
+              <button type="button" className="finish-manually" onClick={onFinishManually}>
+                도착했어요
+              </button>
+            )}
           </div>
         </div>
       </div>

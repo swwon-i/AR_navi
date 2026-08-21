@@ -244,6 +244,47 @@ button.primary:not(:disabled):hover { background: #4a92ff; }
 }
 .instruction strong { font-size: 18px; letter-spacing: -0.01em; }
 .instruction .next-turn { font-size: 13px; color: #9fc0ff; }
+.instruction strong.arriving { color: #6ee7a8; }
+
+/*
+ * 도착 완료 표시.
+ *
+ * 주행 화면 위에 얹히는 반투명 오버레이다. 도착 직후에 "저 건물이 맞나"를 확인해야
+ * 하므로 뒤의 로드뷰가 계속 보이고 조작도 돼야 한다.
+ *
+ * 그래서 레이어는 터치를 통과시키고(pointer-events: none) 카드만 되받는다. 카드를
+ * 아래쪽에 두는 것도 같은 이유다 — 위쪽 절반이 로드뷰다.
+ */
+.done-layer {
+  position: absolute; inset: 0; z-index: 20;
+  display: flex; align-items: flex-end; justify-content: center;
+  padding: 16px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent 45%, rgba(5, 7, 12, 0.72) 100%);
+}
+.done-card {
+  pointer-events: auto;
+  width: 100%; max-width: 360px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 18px 16px 16px;
+  border: 1px solid #2f3545; border-radius: 14px;
+  background: rgba(12, 15, 22, 0.94); backdrop-filter: blur(8px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+.done-title { font-size: 34px; font-weight: 800; letter-spacing: -0.02em; margin: 0; }
+.done-stats {
+  font-size: 15px; color: #9fc0ff; margin: 0 0 14px;
+  font-variant-numeric: tabular-nums;
+}
+.done-card .route-actions { width: 100%; }
+
+/* 경로 끝에서 직접 안내를 끝내는 버튼 */
+.finish-manually {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: 14px; z-index: 6;
+  padding: 9px 18px; border-radius: 999px;
+  border: 1px solid #2b7fff; background: rgba(43, 127, 255, 0.92); color: #fff;
+  font-size: 13px; font-weight: 700; cursor: pointer;
+}
 
 .overlay-hint { color: #8b93a7; font-size: 14px; }
 

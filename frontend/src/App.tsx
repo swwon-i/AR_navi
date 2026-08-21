@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { PlaceSearch } from './components/PlaceSearch';
 import { useCamera, requestOrientationPermission } from './hooks/useCamera';
 import { useGuidance } from './hooks/useGuidance';
@@ -7,6 +7,7 @@ import type { Point } from './lib/geo';
 import { placePoint, type Place } from './lib/places';
 import { fetchRoute, type Route } from './lib/route';
 import { isSimulationMode } from './lib/simulation';
+import { DoneScreen } from './screens/DoneScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { MapScreen } from './screens/MapScreen';
 import { WalkScreen } from './screens/WalkScreen';
@@ -19,12 +20,19 @@ import { WalkScreen } from './screens/WalkScreen';
  */
 const SIM_POSITION: Point = [127.0219, 37.5205]; // 가로수길 북단
 
-type Screen = 'home' | 'map' | 'walk';
+type Screen = 'home' | 'map' | 'walk' | 'done';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home');
   const [searching, setSearching] = useState(false);
   const [destination, setDestination] = useState<Place | null>(null);
+
+  /** 주행 시작 시각. 완료 화면의 소요 시간은 카카오 예상치가 아니라 실제 경과다 */
+  const startedAt = useRef<number | null>(null);
+  const [elapsedSec, setElapsedSec] = useState(0);
+
+  /** "재안내"로 도착 판정을 무시한 상태. 목적지에서 다시 멀어질 때까지 유지된다 */
+  const [arrivalSuppressed, setArrivalSuppressed] = useState(false);
 
   const [route, setRoute] = useState<Route | null>(null);
   const [loading, setLoading] = useState(false);
@@ -49,7 +57,18 @@ export default function App() {
     return nav.startTracking();
   }, [simMode, nav.startTracking]);
 
-  const guidance = useGuidance(route, nav.position, nav.heading);
+  const destinationPoint = useMemo(
+    () => (destination ? placePoint(destination) : null),
+    [destination],
+  );
+
+  const guidance = useGuidance(
+    route,
+    nav.position,
+    nav.heading,
+    destinationPoint,
+    arrivalSuppressed,
+  );
 
   async function findRoute() {
     if (!destination || !currentPosition) return;
@@ -74,6 +93,8 @@ export default function App() {
    */
   async function startWalking() {
     setScreen('walk');
+    startedAt.current = Date.now();
+    setArrivalSuppressed(false);
     await requestOrientationPermission();
 
     if (simMode) nav.startSimulation();
@@ -86,6 +107,60 @@ export default function App() {
     nav.stopSimulation();
     camera.stop();
     setScreen('map');
+  }
+
+  /**
+   * 완료 상태로 들어간다. 자동 판정과 "도착했어요" 버튼이 같은 경로를 쓴다.
+   *
+   * 여기서 카메라·추적을 끄지 않는 것이 중요하다. 완료 표시는 주행 화면 위에 얹히는
+   * 반투명 오버레이라, 뒤의 로드뷰를 계속 쓸 수 있어야 한다. 정리는 "안내 종료"에서.
+   */
+  function markArrived() {
+    setElapsedSec(
+      startedAt.current === null ? 0 : Math.round((Date.now() - startedAt.current) / 1000),
+    );
+    setScreen('done');
+  }
+
+  /*
+   * 도착 감지.
+   *
+   * 판정 자체는 useGuidance 가 경로 잔여 거리로 한다. 여기서는 결과를 받아 완료
+   * 상태로 넘기는 일만 한다.
+   *
+   * "재안내"로 무시한 상태는 목적지에서 충분히 멀어지면(=단계가 'far') 자동으로 푼다.
+   */
+  useEffect(() => {
+    if (screen !== 'walk') return;
+
+    if (guidance.arrival !== 'arrived') {
+      if (arrivalSuppressed && guidance.arrival === 'far') setArrivalSuppressed(false);
+      return;
+    }
+    markArrived();
+  }, [screen, guidance.arrival, arrivalSuppressed]);
+
+  /** "안내 종료". 여기서 비로소 카메라·시뮬레이션을 정리하고 홈으로 돌아간다. */
+  function finishGuidance() {
+    nav.stopSimulation();
+    camera.stop();
+    setScreen('home');
+    setDestination(null);
+    setRoute(null);
+    setArrivalSuppressed(false);
+    startedAt.current = null;
+  }
+
+  /**
+   * "재안내". 판정이 어긋났을 때 안내로 돌아간다.
+   *
+   * 경로는 다시 조회하지 않는다 — 도보 경로 API 는 하루 1,000건이라 왕복마다 쓰면
+   * 금방 소진된다. 시뮬레이션도 다시 시작하지 않는다. 처음부터 다시 걷게 되어
+   * 위치가 출발지로 순간이동하기 때문이다.
+   */
+  function resumeGuidance() {
+    setArrivalSuppressed(true);
+    setScreen('walk');
   }
 
   function selectDestination(place: Place | null) {
@@ -125,7 +200,11 @@ export default function App() {
         />
       )}
 
-      {screen === 'walk' && route && (
+      {/*
+        완료 상태에서도 주행 화면을 그대로 둔다. 완료 표시는 그 위에 얹히는 반투명
+        오버레이라, 뒤의 로드뷰로 건물을 찾을 수 있어야 한다.
+      */}
+      {(screen === 'walk' || screen === 'done') && route && (
         <WalkScreen
           route={route}
           guidance={guidance}
@@ -135,6 +214,16 @@ export default function App() {
           destination={destination}
           camera={camera}
           onBack={stopWalking}
+          onFinishManually={screen === 'walk' ? markArrived : null}
+        />
+      )}
+
+      {screen === 'done' && route && (
+        <DoneScreen
+          distanceM={route.totalDistance}
+          elapsedSec={elapsedSec}
+          onFinish={finishGuidance}
+          onResume={resumeGuidance}
         />
       )}
 
